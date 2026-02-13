@@ -1205,3 +1205,119 @@ body.pinned #drag-handle {
 .fallback-summary:hover {
     color: #999;
 }
+
+/* --- Settings window (NavigationSplitView-ish) --- */
+body.settings-window {
+    background: transparent;
+}
+
+.settings-shell {
+    position: fixed;
+    inset: 0;
+    display: flex;
+}
+
+.settings-sidebar {
+    width: 190px;
+    padding: 14px 12px;
+    background: color-mix(in srgb, rgba(20, 20, 25, 0.85) 60%, transparent);
+    border-right: 1px solid rgba(255,255,255,0.08);
+}
+
+.settings-appname {
+    font-size: 12px;
+    font-weight: 800;
+    color: var(--mb-text);
+    margin-bottom: 12px;
+}
+
+.settings-nav {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.settings-nav-item {
+    text-align: left;
+    padding: 8px 10px;
+    border-radius: var(--mb-radius-md);
+    background: transparent;
+    border: 1px solid transparent;
+    color: var(--mb-text-secondary);
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.settings-nav-item.active {
+    background: color-mix(in srgb, var(--mb-accent) 14%, transparent);
+    border-color: color-mix(in srgb, var(--mb-accent) 22%, transparent);
+    color: var(--mb-text);
+}
+
+.settings-main {
+    flex: 1;
+    padding: 14px 16px;
+    overflow: auto;
+    background: color-mix(in srgb, rgba(20, 20, 25, 0.76) 40%, transparent);
+}
+
+.settings-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.settings-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--mb-text);
+}
+
+.settings-page {
+    padding-bottom: 20px;
+}
+
+.settings-footer {
+    margin-top: 16px;
+    display: flex;
+    justify-content: flex-end;
+}
+
+.docs-table {
+    margin-top: 10px;
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: var(--mb-radius-lg);
+    overflow: hidden;
+}
+
+.docs-header, .docs-row {
+    display: grid;
+    grid-template-columns: 60px 1fr 80px 120px 90px;
+    gap: 8px;
+    align-items: center;
+    padding: 10px;
+}
+
+.docs-header {
+    background: rgba(255,255,255,0.04);
+    color: var(--mb-text-tertiary);
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.docs-row {
+    border-top: 1px solid rgba(255,255,255,0.05);
+    font-size: 12px;
+}
+
+.col-status, .col-size, .col-priority, .col-actions {
+    color: var(--mb-text-secondary);
+}
+
+.col-name {
+    color: var(--mb-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

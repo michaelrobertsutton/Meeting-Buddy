@@ -1,5 +1,5 @@
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 use tauri_plugin_shell::ShellExt;
 
 #[cfg(target_os = "macos")]
@@ -157,8 +157,23 @@ pub fn run() {
                                     let _ = window.emit("toggle-pin", ());
                                 }
                             } else if shortcut == &settings_shortcut {
-                                if let Some(window) = app_handle.get_webview_window("overlay") {
-                                    let _ = window.emit("open-settings", ());
+                                // Open separate Settings window (NavigationSplitView-ish)
+                                if app_handle.get_webview_window("settings").is_none() {
+                                    let _ = WebviewWindowBuilder::new(
+                                        &app_handle,
+                                        "settings",
+                                        WebviewUrl::App("settings.html".into()),
+                                    )
+                                    .title("Meeting Buddy Settings")
+                                    .inner_size(860.0, 600.0)
+                                    .resizable(true)
+                                    .decorations(true)
+                                    .transparent(true)
+                                    .build();
+                                }
+                                if let Some(w) = app_handle.get_webview_window("settings") {
+                                    let _ = w.show();
+                                    let _ = w.set_focus();
                                 }
                             } else if shortcut == &clear_shortcut {
                                 if let Some(window) = app_handle.get_webview_window("overlay") {

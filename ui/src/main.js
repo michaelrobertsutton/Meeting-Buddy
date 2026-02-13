@@ -170,7 +170,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const { getCurrentWindow } = window.__TAURI__.window;
         getCurrentWindow().hide();
     });
-    dom.btnSettings.addEventListener('click', toggleSettings);
+    dom.btnSettings.addEventListener('click', openSettingsWindow);
     dom.btnCloseSettings.addEventListener('click', toggleSettings);
     dom.btnSaveKey.addEventListener('click', saveApiKey);
     dom.btnNewProject.addEventListener('click', () => {
@@ -238,7 +238,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     listen('open-settings', () => {
-        if (!state.settingsOpen) toggleSettings();
+        openSettingsWindow();
     });
 
     listen('clear-session', () => {
@@ -316,6 +316,29 @@ function togglePin() {
 }
 
 // --- Settings Panel ---
+async function openSettingsWindow() {
+    // Prefer the separate Settings window (Phase UI). Fall back to the drawer.
+    try {
+        const { WebviewWindow } = window.__TAURI__.webviewWindow;
+        let w = WebviewWindow.getByLabel('settings');
+        if (!w) {
+            w = new WebviewWindow('settings', {
+                url: 'settings.html',
+                title: 'Meeting Buddy Settings',
+                width: 860,
+                height: 600,
+                transparent: true,
+            });
+        }
+        await w.show();
+        await w.setFocus();
+        return;
+    } catch (err) {
+        console.debug('[Settings] Falling back to drawer:', err.message);
+        toggleSettings();
+    }
+}
+
 function toggleSettings() {
     state.settingsOpen = !state.settingsOpen;
     dom.settingsDrawer.classList.toggle('hidden', !state.settingsOpen);

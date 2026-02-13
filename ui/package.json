@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "tauri": "tauri",
-    "build-frontend": "mkdir -p dist/src && cp index.html dist/ && cp src/* dist/src/"
+    "build-frontend": "mkdir -p dist/src && cp index.html settings.html dist/ && cp src/* dist/src/"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2"
