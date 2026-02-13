@@ -183,6 +183,75 @@ body.manual-question #quick-question {
     display: none;
 }
 
+/* --- Answer Card (Phase UI) --- */
+
+.answer-card {
+    border-radius: var(--mb-radius-lg);
+    border: 0.5px solid color-mix(in srgb, #fff 10%, transparent);
+    background: color-mix(in srgb, rgba(255,255,255,0.06) 70%, transparent);
+    padding: 10px 10px;
+
+    /* Motion + constraints */
+    max-height: 400px;
+    overflow: hidden;
+    transition: transform 240ms ease, opacity 240ms ease;
+}
+
+body.has-question .answer-card {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+body:not(.has-question) .answer-card {
+    opacity: 0.75;
+    transform: translateY(4px);
+}
+
+.answer-card-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+}
+
+.answer-card-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.8px;
+    color: var(--mb-accent);
+}
+
+.answer-card-body {
+    max-height: 340px;
+    overflow: auto;
+    padding-right: 4px;
+}
+
+.answer-card-body::-webkit-scrollbar { width: 4px; }
+.answer-card-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 2px; }
+
+#answer-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--mb-text);
+    margin-bottom: 10px;
+}
+
+.answer-card-points-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: color-mix(in srgb, var(--mb-text) 60%, transparent);
+    margin-bottom: 6px;
+}
+
+#bullet-list {
+    list-style: disc;
+    padding-left: 18px;
+    color: color-mix(in srgb, var(--mb-text) 70%, transparent);
+}
+
+#bullet-list li { margin-bottom: 6px; }
+
 /* --- Question Section --- */
 
 .section-header {

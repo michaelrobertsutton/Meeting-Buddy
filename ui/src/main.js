@@ -1090,6 +1090,7 @@ function setConnectionStatus(status) {
 function renderQuestion(questionText) {
     dom.questionText.textContent = questionText || 'Listening...';
     dom.questionText.classList.toggle('placeholder', !questionText);
+    document.body.classList.toggle('has-question', !!questionText);
 }
 
 function renderSearchingState(searching) {
