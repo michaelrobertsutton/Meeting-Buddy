@@ -3,7 +3,7 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
 #[cfg(target_os = "macos")]
-use tauri_plugin_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 /// Holds the backend sidecar child process so we can kill it on app exit.
 struct BackendChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
