@@ -16,30 +16,45 @@ class SettingsStore: ObservableObject {
     @Published var isIngesting = false
     @Published var ingestProgress: String? = nil
     @Published var errorMessage: String? = nil
+    @Published var toastMessage: String? = nil
+    @Published var reconnecting: Bool = false
 
     // MARK: - Private
 
     private let client = WebSocketClient()
     private var pendingCommands: [String: CheckedContinuation<[String: Any], Error>] = [:]
     private var listenerTask: Task<Void, Never>?
+    private var connectionPollTask: Task<Void, Never>?
 
     // MARK: - Lifecycle
 
     func start() {
         listenerTask = Task {
             await client.connect()
-            await MainActor.run { self.isConnected = true }
 
             let stream = await client.messages()
             for await msg in stream {
                 await self.handleMessage(msg)
             }
-            await MainActor.run { self.isConnected = false }
+        }
+
+        connectionPollTask = Task {
+            while !Task.isCancelled {
+                let connected = await client.isConnected
+                await MainActor.run {
+                    if self.isConnected != connected {
+                        self.isConnected = connected
+                    }
+                    self.reconnecting = (!connected)
+                }
+                try? await Task.sleep(nanoseconds: 500_000_000)
+            }
         }
     }
 
     func stop() {
         listenerTask?.cancel()
+        connectionPollTask?.cancel()
         Task { await client.disconnect() }
     }
 
@@ -102,6 +117,7 @@ class SettingsStore: ObservableObject {
             let data = try await sendCommand("get_settings")
             applySettings(data)
         } catch {
+            // Treat as fatal: settings are required for the window to function.
             errorMessage = error.localizedDescription
         }
     }
@@ -123,7 +139,7 @@ class SettingsStore: ObservableObject {
             applySettings(data)
             await fetchDocs()
         } catch {
-            errorMessage = error.localizedDescription
+            showToast(error.localizedDescription)
         }
     }
 
@@ -134,7 +150,7 @@ class SettingsStore: ObservableObject {
                 projects = raw.compactMap { decodeProject($0) }
             }
         } catch {
-            errorMessage = error.localizedDescription
+            showToast(error.localizedDescription)
         }
     }
 
@@ -148,7 +164,7 @@ class SettingsStore: ObservableObject {
                 activeProject = projects.first?.name ?? ""
             }
         } catch {
-            errorMessage = error.localizedDescription
+            showToast(error.localizedDescription)
         }
     }
 
@@ -173,7 +189,7 @@ class SettingsStore: ObservableObject {
         } catch {
             isIngesting = false
             ingestProgress = nil
-            errorMessage = error.localizedDescription
+            showToast(error.localizedDescription)
         }
     }
 
@@ -182,7 +198,7 @@ class SettingsStore: ObservableObject {
             try await sendCommand("delete_doc", params: ["title": title])
             await fetchDocs()
         } catch {
-            errorMessage = error.localizedDescription
+            showToast(error.localizedDescription)
         }
     }
 
@@ -193,6 +209,7 @@ class SettingsStore: ObservableObject {
                 NSWorkspace.shared.open(url)
             }
         } catch {
+            // Treat as fatal: auth flows are user-visible and should be explicit.
             errorMessage = error.localizedDescription
         }
     }
@@ -218,6 +235,16 @@ class SettingsStore: ObservableObject {
     }
 
     // MARK: - Helpers
+
+    private func showToast(_ msg: String) {
+        toastMessage = msg
+        Task {
+            try? await Task.sleep(nanoseconds: 3_000_000_000)
+            await MainActor.run {
+                self.toastMessage = nil
+            }
+        }
+    }
 
     private func applySettings(_ data: [String: Any]) {
         activeProject = data["active_project"] as? String ?? activeProject

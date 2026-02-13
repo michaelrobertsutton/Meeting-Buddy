@@ -10,6 +10,8 @@ actor WebSocketClient {
 
     private(set) var isConnected = false
 
+    private var reconnectAttempt = 0
+
     init(url: URL = URL(string: "ws://localhost:8765")!) {
         self.url = url
     }
@@ -26,10 +28,22 @@ actor WebSocketClient {
         Task { await self.receiveLoop() }
     }
 
+    private func scheduleReconnect() async {
+        reconnectAttempt = min(reconnectAttempt + 1, 6)
+        let delay = min(pow(2.0, Double(reconnectAttempt)) * 0.25, 8.0)
+        try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+
+        // If we were explicitly disconnected in the meantime, don't reconnect.
+        guard task != nil || isConnected == false else { return }
+
+        await connect()
+    }
+
     func disconnect() {
         task?.cancel(with: .normalClosure, reason: nil)
         task = nil
         isConnected = false
+        reconnectAttempt = 0
         streamContinuation?.finish()
     }
 
@@ -37,8 +51,14 @@ actor WebSocketClient {
 
     func send(command: String, params: [String: Any] = [:], id: String? = nil) async throws {
         guard let task else { throw URLError(.notConnectedToInternet) }
-        var dict: [String: Any] = ["id": id ?? UUID().uuidString, "command": command]
-        for (k, v) in params { dict[k] = v }
+        // Preferred protocol envelope:
+        //   {"id": "...", "command": "...", "params": { ... }}
+        // Backend also supports legacy flat params, but we standardize on `params`.
+        let dict: [String: Any] = [
+            "id": id ?? UUID().uuidString,
+            "command": command,
+            "params": params,
+        ]
         let data = try JSONSerialization.data(withJSONObject: dict)
         let string = String(data: data, encoding: .utf8)!
         try await task.send(.string(string))
@@ -58,6 +78,9 @@ actor WebSocketClient {
         while isConnected, let task {
             do {
                 let message = try await task.receive()
+                // Reset backoff on first successful message received.
+                reconnectAttempt = 0
+
                 var raw: String?
                 switch message {
                 case .string(let s): raw = s
@@ -70,7 +93,12 @@ actor WebSocketClient {
                 }
             } catch {
                 isConnected = false
-                streamContinuation?.finish()
+
+                // Drop the current task and schedule reconnect.
+                task.cancel(with: .goingAway, reason: nil)
+                self.task = nil
+
+                Task { await self.scheduleReconnect() }
                 break
             }
         }
