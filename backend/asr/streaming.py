@@ -9,9 +9,9 @@ from typing import Callable
 
 import numpy as np
 
-from backend.audio.capture import AudioCapture
 from backend.asr.engine import ASREngine
 from backend.asr.vad import VADFilter
+from backend.audio.capture import AudioCapture
 from backend.config import AudioConfig, StreamingConfig
 
 logger = logging.getLogger(__name__)

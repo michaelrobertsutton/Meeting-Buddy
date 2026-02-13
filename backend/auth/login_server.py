@@ -6,7 +6,6 @@ import hashlib
 import logging
 import os
 import urllib.parse
-from http import HTTPStatus
 
 from aiohttp import web
 
@@ -192,9 +191,9 @@ class LoginServer:
             raise RuntimeError("Login not started")
         try:
             return await asyncio.wait_for(self._login_future, timeout=timeout)
-        except asyncio.TimeoutError:
+        except asyncio.TimeoutError as e:
             logger.warning("Login timed out after %ds", timeout)
-            raise RuntimeError("Login timed out — try again")
+            raise RuntimeError("Login timed out — try again") from e
         finally:
             await self._cleanup()
 

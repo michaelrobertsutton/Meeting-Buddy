@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 from ingest.parsers.base import ParsedDocument, ParsedSection

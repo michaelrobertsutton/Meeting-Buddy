@@ -86,7 +86,6 @@ def render_markdown(session: SessionData) -> str:
     lines.append("## Full Transcript")
     lines.append("")
     if session.transcript_segments:
-        session_start = session.session_start
         for seg in session.transcript_segments:
             offset_s = seg.get("start_time", 0)
             mm = int(offset_s) // 60

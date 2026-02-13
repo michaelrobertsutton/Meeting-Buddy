@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 import re
 import time
-import logging
 
 from backend.config import ActiveQuestionConfig
 from backend.transcript.buffer import TranscriptBuffer

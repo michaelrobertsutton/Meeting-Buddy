@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from ingest.parsers.base import DocumentParser, ParsedDocument, ParsedSection
+from ingest.parsers.base import ParsedDocument, ParsedSection
 
 
 class PDFParser:
