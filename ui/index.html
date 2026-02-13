@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meeting Buddy</title>
+    <link rel="stylesheet" href="src/style.css">
+</head>
+<body>
+    <div id="drag-handle" data-tauri-drag-region>
+        <span class="title">Meeting Buddy</span>
+        <select id="header-project" title="Switch project"></select>
+        <div class="controls">
+            <button id="btn-settings" title="Settings"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+            <button id="btn-pin" title="Pin (Cmd+Shift+P)">Pin</button>
+            <button id="btn-close" title="Close">&times;</button>
+        </div>
+    </div>
+
+    <div id="settings-drawer" class="hidden">
+        <div class="settings-section">
+            <h3>OpenAI Authentication</h3>
+            <div id="oauth-section">
+                <div id="oauth-logged-out">
+                    <button id="btn-login" class="btn-login">Login with OpenAI</button>
+                    <div id="login-status" class="settings-status"></div>
+                </div>
+                <div id="oauth-logged-in" class="hidden">
+                    <div class="oauth-user">
+                        <span id="oauth-email"></span>
+                        <button id="btn-logout" class="btn-danger">Logout</button>
+                    </div>
+                </div>
+            </div>
+            <details id="api-key-fallback">
+                <summary class="fallback-summary">Use API key instead</summary>
+                <div class="settings-row" style="margin-top: 6px;">
+                    <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off" />
+                    <button id="btn-save-key">Save</button>
+                </div>
+                <div id="api-key-status" class="settings-status"></div>
+            </details>
+        </div>
+
+        <div class="settings-section">
+            <h3>Project</h3>
+            <div class="settings-row">
+                <select id="project-select">
+                    <option value="">No project</option>
+                </select>
+                <button id="btn-new-project" title="New project">+</button>
+                <button id="btn-delete-project" title="Delete project">&minus;</button>
+            </div>
+            <div id="create-project-form" class="hidden">
+                <div class="settings-row">
+                    <input type="text" id="new-project-name" placeholder="Project name" />
+                    <button id="btn-create-project">Create</button>
+                    <button id="btn-cancel-create" class="btn-secondary">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <h3>Documents</h3>
+            <div class="settings-row">
+                <button id="btn-add-files">Add Files</button>
+                <button id="btn-add-folder">Add Folder</button>
+            </div>
+            <div id="ingest-progress" class="hidden">
+                <div class="progress-bar"><div id="progress-fill"></div></div>
+                <span id="progress-text"></span>
+            </div>
+            <ul id="doc-list"></ul>
+        </div>
+
+        <button id="btn-close-settings" class="btn-secondary">Close Settings</button>
+    </div>
+
+    <div id="content">
+        <section id="active-question" class="section">
+            <div class="section-header">
+                <h3>Active Question</h3>
+                <div class="question-controls">
+                    <button id="btn-auto-question" class="qh-btn active" title="Auto-detect questions">Auto</button>
+                    <button id="btn-question-history" class="qh-btn" title="Show question history">History <span id="qh-count">0</span></button>
+                </div>
+            </div>
+            <p id="question-text" class="placeholder">Listening...</p>
+            <div id="question-history-panel" class="hidden">
+                <ul id="question-history-list"></ul>
+            </div>
+        </section>
+
+        <section id="answer" class="section">
+            <h3>Answer</h3>
+            <div id="answer-searching" class="hidden">
+                <span class="search-spinner"></span>
+                <span class="search-text">Searching sources...</span>
+            </div>
+            <p id="answer-text" class="placeholder">Waiting for question...</p>
+        </section>
+
+        <section id="bullets" class="section">
+            <h3>Key Points</h3>
+            <ul id="bullet-list">
+                <li class="placeholder">Bullets will appear here</li>
+            </ul>
+        </section>
+
+        <section id="best-practice" class="section hidden">
+            <h3>Common Practice <span class="label-unconfirmed">(not from sources)</span></h3>
+            <ul id="best-practice-list"></ul>
+        </section>
+
+        <section id="clarifiers" class="section hidden">
+            <h3>Clarifying Questions</h3>
+            <ul id="clarifier-list"></ul>
+        </section>
+
+        <details id="citations" class="section">
+            <summary>Citations (0)</summary>
+            <ul id="citation-list"></ul>
+        </details>
+
+        <section id="transcript" class="section">
+            <h3>Transcript</h3>
+            <div id="transcript-scroll">
+                <div id="transcript-content"></div>
+            </div>
+        </section>
+    </div>
+
+    <div id="status-bar">
+        <span id="connection-status">Disconnected</span>
+        <span id="pin-status" class="hidden">PINNED</span>
+    </div>
+
+    <script src="src/main.js"></script>
+</body>
+</html>

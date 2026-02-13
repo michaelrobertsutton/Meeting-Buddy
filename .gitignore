@@ -1,0 +1,46 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+.venv/
+venv/
+env/
+
+.env
+.env.local
+
+*.so
+*.dylib
+
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# faster-whisper model cache
+models/
+
+# Audio recordings (if any)
+*.wav
+*.mp3
+*.m4a
+
+# Tauri / Rust
+ui/node_modules/
+ui/src-tauri/target/
+
+# Swift build artifacts
+audio-capture/.build/
+
+# User data (local)
+# ~/.meeting-buddy/ is outside repo, but just in case
+*.lance/

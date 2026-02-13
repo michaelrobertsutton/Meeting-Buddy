@@ -1,0 +1,824 @@
+// --- State ---
+const state = {
+    segments: [],
+    version: -1,
+    pinned: false,
+    pinnedSegments: null,
+    connected: false,
+    ws: null,
+    activeQuestion: null,
+    activeAnswer: null,
+    settingsOpen: false,
+    questionHistory: [],
+    historyOpen: false,
+    manualQuestion: false,
+    synthesisSearching: false,
+};
+
+const WS_URL = 'ws://localhost:8765';
+const RECONNECT_DELAY_MS = 2000;
+const MAX_RECONNECT_DELAY_MS = 30000;
+
+// --- Command request/response ---
+let _cmdId = 0;
+const _pendingCommands = new Map(); // id -> {resolve, reject}
+
+function sendCommand(command, params = {}) {
+    return new Promise((resolve, reject) => {
+        if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+            reject(new Error('Not connected'));
+            return;
+        }
+        const id = String(++_cmdId);
+        _pendingCommands.set(id, { resolve, reject });
+        state.ws.send(JSON.stringify({ id, command, ...params }));
+
+        // Timeout after 30s
+        setTimeout(() => {
+            if (_pendingCommands.has(id)) {
+                _pendingCommands.delete(id);
+                reject(new Error('Command timed out'));
+            }
+        }, 30000);
+    });
+}
+
+// --- DOM References ---
+const dom = {};
+
+// --- Initialization ---
+document.addEventListener('DOMContentLoaded', () => {
+    dom.questionText = document.getElementById('question-text');
+    dom.answerText = document.getElementById('answer-text');
+    dom.bulletList = document.getElementById('bullet-list');
+    dom.bestPracticeSection = document.getElementById('best-practice');
+    dom.bestPracticeList = document.getElementById('best-practice-list');
+    dom.clarifierSection = document.getElementById('clarifiers');
+    dom.clarifierList = document.getElementById('clarifier-list');
+    dom.citationsSummary = document.querySelector('#citations summary');
+    dom.citationList = document.getElementById('citation-list');
+    dom.transcriptContent = document.getElementById('transcript-content');
+    dom.transcriptScroll = document.getElementById('transcript-scroll');
+    dom.connectionStatus = document.getElementById('connection-status');
+    dom.pinStatus = document.getElementById('pin-status');
+    dom.btnPin = document.getElementById('btn-pin');
+    dom.btnClose = document.getElementById('btn-close');
+    dom.btnSettings = document.getElementById('btn-settings');
+    dom.settingsDrawer = document.getElementById('settings-drawer');
+    dom.content = document.getElementById('content');
+
+    // Header project switcher
+    dom.headerProject = document.getElementById('header-project');
+
+    // Question history
+    dom.btnAutoQuestion = document.getElementById('btn-auto-question');
+    dom.btnQuestionHistory = document.getElementById('btn-question-history');
+    dom.qhCount = document.getElementById('qh-count');
+    dom.questionHistoryPanel = document.getElementById('question-history-panel');
+    dom.questionHistoryList = document.getElementById('question-history-list');
+
+    // Answer searching
+    dom.answerSearching = document.getElementById('answer-searching');
+
+    // Settings elements
+    dom.apiKeyInput = document.getElementById('api-key-input');
+    dom.btnSaveKey = document.getElementById('btn-save-key');
+    dom.apiKeyStatus = document.getElementById('api-key-status');
+    dom.projectSelect = document.getElementById('project-select');
+    dom.btnNewProject = document.getElementById('btn-new-project');
+    dom.btnDeleteProject = document.getElementById('btn-delete-project');
+    dom.createProjectForm = document.getElementById('create-project-form');
+    dom.newProjectName = document.getElementById('new-project-name');
+    dom.btnCreateProject = document.getElementById('btn-create-project');
+    dom.btnCancelCreate = document.getElementById('btn-cancel-create');
+    dom.btnAddFiles = document.getElementById('btn-add-files');
+    dom.btnAddFolder = document.getElementById('btn-add-folder');
+    dom.ingestProgress = document.getElementById('ingest-progress');
+    dom.progressFill = document.getElementById('progress-fill');
+    dom.progressText = document.getElementById('progress-text');
+    dom.docList = document.getElementById('doc-list');
+    dom.btnCloseSettings = document.getElementById('btn-close-settings');
+    dom.btnLogin = document.getElementById('btn-login');
+    dom.loginStatus = document.getElementById('login-status');
+    dom.oauthLoggedOut = document.getElementById('oauth-logged-out');
+    dom.oauthLoggedIn = document.getElementById('oauth-logged-in');
+    dom.oauthEmail = document.getElementById('oauth-email');
+    dom.btnLogout = document.getElementById('btn-logout');
+    dom.apiKeyFallback = document.getElementById('api-key-fallback');
+
+    // Event listeners
+    dom.btnPin.addEventListener('click', togglePin);
+    dom.btnClose.addEventListener('click', () => {
+        const { getCurrentWindow } = window.__TAURI__.window;
+        getCurrentWindow().hide();
+    });
+    dom.btnSettings.addEventListener('click', toggleSettings);
+    dom.btnCloseSettings.addEventListener('click', toggleSettings);
+    dom.btnSaveKey.addEventListener('click', saveApiKey);
+    dom.btnNewProject.addEventListener('click', () => {
+        dom.createProjectForm.classList.remove('hidden');
+        dom.newProjectName.focus();
+    });
+    dom.btnCancelCreate.addEventListener('click', () => {
+        dom.createProjectForm.classList.add('hidden');
+        dom.newProjectName.value = '';
+    });
+    dom.btnCreateProject.addEventListener('click', createProject);
+    dom.btnDeleteProject.addEventListener('click', deleteProject);
+    dom.projectSelect.addEventListener('change', switchProject);
+    dom.btnAddFiles.addEventListener('click', pickFiles);
+    dom.btnAddFolder.addEventListener('click', pickFolder);
+    dom.btnLogin.addEventListener('click', startLogin);
+    dom.btnLogout.addEventListener('click', doLogout);
+    dom.headerProject.addEventListener('change', headerSwitchProject);
+    dom.btnAutoQuestion.addEventListener('click', resumeAutoQuestion);
+    dom.btnQuestionHistory.addEventListener('click', toggleQuestionHistory);
+
+    // Enter key for inputs
+    dom.apiKeyInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') saveApiKey();
+    });
+    dom.newProjectName.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') createProject();
+    });
+
+    // Listen for pin toggle from Rust global hotkey
+    const { listen } = window.__TAURI__.event;
+    listen('toggle-pin', () => {
+        togglePin();
+    });
+
+    connectWebSocket();
+});
+
+// --- Pin Logic ---
+function togglePin() {
+    state.pinned = !state.pinned;
+
+    if (state.pinned) {
+        state.pinnedSegments = [...state.segments];
+        document.body.classList.add('pinned');
+        dom.pinStatus.classList.remove('hidden');
+        dom.btnPin.classList.add('active');
+    } else {
+        state.pinnedSegments = null;
+        document.body.classList.remove('pinned');
+        dom.pinStatus.classList.add('hidden');
+        dom.btnPin.classList.remove('active');
+        renderTranscript();
+    }
+}
+
+// --- Settings Panel ---
+function toggleSettings() {
+    state.settingsOpen = !state.settingsOpen;
+    dom.settingsDrawer.classList.toggle('hidden', !state.settingsOpen);
+    dom.content.classList.toggle('hidden', state.settingsOpen);
+    dom.btnSettings.classList.toggle('active', state.settingsOpen);
+
+    if (state.settingsOpen) {
+        loadSettings();
+    }
+}
+
+async function loadSettings() {
+    try {
+        const data = await sendCommand('get_settings');
+        // API key status
+        if (data.has_api_key) {
+            dom.apiKeyStatus.textContent = 'Key set: ' + data.openai_api_key_masked;
+            dom.apiKeyStatus.className = 'settings-status ok';
+        } else {
+            dom.apiKeyStatus.textContent = 'No API key configured';
+            dom.apiKeyStatus.className = 'settings-status error';
+        }
+        dom.apiKeyInput.value = '';
+
+        // OAuth status
+        const oauth = data.oauth_status || {};
+        if (oauth.logged_in) {
+            dom.oauthLoggedOut.classList.add('hidden');
+            dom.oauthLoggedIn.classList.remove('hidden');
+            dom.oauthEmail.textContent = oauth.email || 'Logged in';
+            dom.loginStatus.textContent = '';
+        } else {
+            dom.oauthLoggedOut.classList.remove('hidden');
+            dom.oauthLoggedIn.classList.add('hidden');
+            dom.loginStatus.textContent = '';
+        }
+
+        // Projects
+        renderProjectList(data.projects || [], data.active_project || '');
+
+        // Docs
+        refreshDocList();
+    } catch (err) {
+        console.error('[Settings] Load failed:', err);
+    }
+}
+
+async function saveApiKey() {
+    const key = dom.apiKeyInput.value.trim();
+    if (!key) return;
+
+    try {
+        const data = await sendCommand('set_api_key', { key });
+        dom.apiKeyInput.value = '';
+        dom.apiKeyStatus.textContent = 'Key saved: ' + data.openai_api_key_masked;
+        dom.apiKeyStatus.className = 'settings-status ok';
+    } catch (err) {
+        dom.apiKeyStatus.textContent = 'Error: ' + err.message;
+        dom.apiKeyStatus.className = 'settings-status error';
+    }
+}
+
+async function startLogin() {
+    dom.btnLogin.disabled = true;
+    dom.loginStatus.textContent = 'Opening browser...';
+    dom.loginStatus.className = 'settings-status';
+
+    try {
+        const data = await sendCommand('start_login');
+        // Open auth URL in default browser via Tauri shell plugin
+        const { open } = window.__TAURI__.shell;
+        await open(data.auth_url);
+        dom.loginStatus.textContent = 'Waiting for login in browser...';
+    } catch (err) {
+        dom.loginStatus.textContent = 'Error: ' + err.message;
+        dom.loginStatus.className = 'settings-status error';
+        dom.btnLogin.disabled = false;
+    }
+}
+
+async function doLogout() {
+    try {
+        await sendCommand('logout');
+        dom.oauthLoggedOut.classList.remove('hidden');
+        dom.oauthLoggedIn.classList.add('hidden');
+        dom.loginStatus.textContent = 'Logged out';
+        dom.loginStatus.className = 'settings-status';
+    } catch (err) {
+        console.error('[Settings] Logout failed:', err);
+    }
+}
+
+function renderProjectList(projects, activeProject) {
+    // Settings dropdown (full detail with chunk counts)
+    dom.projectSelect.innerHTML = '<option value="">No project</option>';
+    for (const p of projects) {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name + (p.chunk_count != null ? ' (' + p.chunk_count + ' chunks)' : '');
+        if (p.name === activeProject) opt.selected = true;
+        dom.projectSelect.appendChild(opt);
+    }
+
+    // Header dropdown (compact)
+    dom.headerProject.innerHTML = '<option value="">No project</option>';
+    for (const p of projects) {
+        const opt = document.createElement('option');
+        opt.value = p.name;
+        opt.textContent = p.name;
+        if (p.name === activeProject) opt.selected = true;
+        dom.headerProject.appendChild(opt);
+    }
+    dom.headerProject.classList.toggle('no-project', !activeProject);
+}
+
+async function switchProject() {
+    const name = dom.projectSelect.value;
+    if (!name) return;
+
+    try {
+        await sendCommand('switch_project', { name });
+        // Sync header dropdown
+        dom.headerProject.value = name;
+        dom.headerProject.classList.toggle('no-project', !name);
+        refreshDocList();
+    } catch (err) {
+        console.error('[Settings] Switch project failed:', err);
+    }
+}
+
+async function headerSwitchProject() {
+    const name = dom.headerProject.value;
+    try {
+        await sendCommand('switch_project', { name });
+        // Sync settings dropdown
+        dom.projectSelect.value = name;
+        dom.headerProject.classList.toggle('no-project', !name);
+    } catch (err) {
+        console.error('[Header] Switch project failed:', err);
+    }
+}
+
+async function createProject() {
+    const name = dom.newProjectName.value.trim();
+    if (!name) return;
+
+    try {
+        const data = await sendCommand('create_project', { name });
+        dom.newProjectName.value = '';
+        dom.createProjectForm.classList.add('hidden');
+
+        // Refresh list and select new project
+        renderProjectList(data.projects || [], name);
+
+        // Auto-switch to it
+        await sendCommand('switch_project', { name });
+        refreshDocList();
+    } catch (err) {
+        console.error('[Settings] Create project failed:', err);
+    }
+}
+
+async function deleteProject() {
+    const name = dom.projectSelect.value;
+    if (!name) return;
+
+    if (!confirm('Delete project "' + name + '" and all its documents?')) return;
+
+    try {
+        const data = await sendCommand('delete_project', { name });
+        renderProjectList(data.projects || [], '');
+        refreshDocList();
+    } catch (err) {
+        console.error('[Settings] Delete project failed:', err);
+    }
+}
+
+// --- Document Management ---
+async function refreshDocList() {
+    try {
+        const data = await sendCommand('list_docs');
+        dom.docList.innerHTML = '';
+        const docs = data.docs || [];
+        if (docs.length === 0) {
+            const li = document.createElement('li');
+            li.className = 'empty-msg';
+            li.textContent = 'No documents ingested';
+            dom.docList.appendChild(li);
+        } else {
+            for (const title of docs) {
+                const li = document.createElement('li');
+                const span = document.createElement('span');
+                span.className = 'doc-title';
+                span.textContent = title;
+                const btn = document.createElement('button');
+                btn.textContent = 'Delete';
+                btn.className = 'btn-danger';
+                btn.addEventListener('click', () => deleteDoc(title));
+                li.appendChild(span);
+                li.appendChild(btn);
+                dom.docList.appendChild(li);
+            }
+        }
+    } catch (err) {
+        console.error('[Settings] List docs failed:', err);
+    }
+}
+
+async function deleteDoc(title) {
+    if (!confirm('Delete "' + title + '" from the project?')) return;
+
+    try {
+        const data = await sendCommand('delete_doc', { title });
+        dom.docList.innerHTML = '';
+        const docs = data.docs || [];
+        if (docs.length === 0) {
+            const li = document.createElement('li');
+            li.className = 'empty-msg';
+            li.textContent = 'No documents ingested';
+            dom.docList.appendChild(li);
+        } else {
+            for (const t of docs) {
+                const li = document.createElement('li');
+                const span = document.createElement('span');
+                span.className = 'doc-title';
+                span.textContent = t;
+                const btn = document.createElement('button');
+                btn.textContent = 'Delete';
+                btn.className = 'btn-danger';
+                btn.addEventListener('click', () => deleteDoc(t));
+                li.appendChild(span);
+                li.appendChild(btn);
+                dom.docList.appendChild(li);
+            }
+        }
+    } catch (err) {
+        console.error('[Settings] Delete doc failed:', err);
+    }
+}
+
+// --- File Picker ---
+async function pickFiles() {
+    try {
+        const { open } = window.__TAURI__.dialog;
+        const selected = await open({
+            multiple: true,
+            filters: [{
+                name: 'Documents',
+                extensions: ['pdf', 'docx', 'md', 'html', 'htm', 'txt'],
+            }],
+        });
+        if (selected) {
+            const paths = Array.isArray(selected) ? selected : [selected];
+            if (paths.length > 0) startIngestion(paths);
+        }
+    } catch (err) {
+        console.error('[Settings] File picker failed:', err);
+    }
+}
+
+async function pickFolder() {
+    try {
+        const { open } = window.__TAURI__.dialog;
+        const selected = await open({ directory: true });
+        if (selected) {
+            startIngestion([selected]);
+        }
+    } catch (err) {
+        console.error('[Settings] Folder picker failed:', err);
+    }
+}
+
+async function startIngestion(paths) {
+    dom.ingestProgress.classList.remove('hidden');
+    dom.progressFill.style.width = '0%';
+    dom.progressText.textContent = 'Starting ingestion...';
+    dom.btnAddFiles.disabled = true;
+    dom.btnAddFolder.disabled = true;
+
+    try {
+        await sendCommand('ingest_files', { paths });
+    } catch (err) {
+        dom.progressText.textContent = 'Error: ' + err.message;
+        dom.btnAddFiles.disabled = false;
+        dom.btnAddFolder.disabled = false;
+    }
+}
+
+function renderIngestProgress(data) {
+    dom.ingestProgress.classList.remove('hidden');
+    const pct = Math.round((data.current / data.total) * 100);
+    dom.progressFill.style.width = pct + '%';
+    dom.progressText.textContent = 'Ingesting ' + data.file + ' (' + data.current + '/' + data.total + ')';
+}
+
+function renderIngestComplete(data) {
+    dom.progressFill.style.width = '100%';
+    const errCount = (data.errors || []).length;
+    if (errCount > 0) {
+        dom.progressText.textContent = 'Done: ' + data.total_chunks + ' chunks, ' + errCount + ' errors';
+    } else {
+        dom.progressText.textContent = 'Done: ' + data.total_chunks + ' chunks from ' + data.file_count + ' files';
+    }
+    dom.btnAddFiles.disabled = false;
+    dom.btnAddFolder.disabled = false;
+
+    // Hide progress after 3s
+    setTimeout(() => {
+        dom.ingestProgress.classList.add('hidden');
+    }, 3000);
+
+    // Refresh doc list and project list
+    refreshDocList();
+    loadSettings();
+}
+
+// --- WebSocket ---
+let reconnectDelay = RECONNECT_DELAY_MS;
+let reconnectTimer = null;
+
+function connectWebSocket() {
+    setConnectionStatus('connecting');
+
+    const ws = new WebSocket(WS_URL);
+    state.ws = ws;
+
+    ws.onopen = async () => {
+        console.log('[WS] Connected');
+        setConnectionStatus('connected');
+        reconnectDelay = RECONNECT_DELAY_MS;
+        // Load project list into header dropdown on connect
+        try {
+            const data = await sendCommand('get_settings');
+            renderProjectList(data.projects || [], data.active_project || '');
+        } catch (err) {
+            console.error('[WS] Failed to load projects on connect:', err);
+        }
+    };
+
+    ws.onmessage = (event) => {
+        try {
+            const msg = JSON.parse(event.data);
+            handleMessage(msg);
+        } catch (err) {
+            console.error('[WS] Parse error:', err);
+        }
+    };
+
+    ws.onclose = () => {
+        setConnectionStatus('disconnected');
+        state.connected = false;
+        state.ws = null;
+
+        // Reject all pending commands
+        for (const [id, { reject }] of _pendingCommands) {
+            reject(new Error('Connection lost'));
+        }
+        _pendingCommands.clear();
+
+        scheduleReconnect();
+    };
+
+    ws.onerror = () => {
+        ws.close();
+    };
+}
+
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectWebSocket();
+        reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY_MS);
+    }, reconnectDelay);
+}
+
+function handleMessage(msg) {
+    // Route command responses
+    if (msg.type === 'response' && msg.id) {
+        const pending = _pendingCommands.get(msg.id);
+        if (pending) {
+            _pendingCommands.delete(msg.id);
+            if (msg.success) {
+                pending.resolve(msg.data || {});
+            } else {
+                pending.reject(new Error(msg.error || 'Command failed'));
+            }
+        }
+        return;
+    }
+
+    // Ingestion progress events
+    if (msg.type === 'ingest_progress') {
+        renderIngestProgress(msg);
+        return;
+    }
+    if (msg.type === 'ingest_complete') {
+        renderIngestComplete(msg);
+        return;
+    }
+
+    // OAuth events
+    if (msg.type === 'auth_complete') {
+        dom.oauthLoggedOut.classList.add('hidden');
+        dom.oauthLoggedIn.classList.remove('hidden');
+        dom.oauthEmail.textContent = (msg.oauth_status && msg.oauth_status.email) || 'Logged in';
+        dom.loginStatus.textContent = '';
+        dom.btnLogin.disabled = false;
+        return;
+    }
+    if (msg.type === 'auth_error') {
+        dom.loginStatus.textContent = msg.error || 'Login failed';
+        dom.loginStatus.className = 'settings-status error';
+        dom.btnLogin.disabled = false;
+        return;
+    }
+    if (msg.type === 'auth_logout') {
+        dom.oauthLoggedOut.classList.remove('hidden');
+        dom.oauthLoggedIn.classList.add('hidden');
+        return;
+    }
+
+    // Handle synthesis searching event
+    if (msg.type === 'synthesis_searching') {
+        state.synthesisSearching = true;
+        renderSearchingState(true);
+        return;
+    }
+    if (msg.type === 'synthesis_error') {
+        state.synthesisSearching = false;
+        renderSearchingState(false);
+        return;
+    }
+
+    // Handle answer_update independently (no version check)
+    if (msg.type === 'answer_update') {
+        state.synthesisSearching = false;
+        renderSearchingState(false);
+        if (msg.active_answer && !state.pinned) {
+            state.activeAnswer = msg.active_answer;
+            renderAnswer(msg.active_answer);
+        }
+        return;
+    }
+
+    if (msg.version <= state.version && msg.type !== 'snapshot') {
+        return;
+    }
+
+    state.version = msg.version;
+    state.segments = msg.segments || [];
+
+    // Update question history
+    if (msg.question_history) {
+        state.questionHistory = msg.question_history;
+        dom.qhCount.textContent = msg.question_history.length;
+        if (state.historyOpen) {
+            renderQuestionHistory();
+        }
+    }
+
+    // Track manual mode
+    state.manualQuestion = !!msg.manual_question;
+    dom.btnAutoQuestion.classList.toggle('active', !state.manualQuestion);
+
+    // Update synthesis searching state
+    if (msg.synthesis_searching !== undefined) {
+        state.synthesisSearching = msg.synthesis_searching;
+        renderSearchingState(msg.synthesis_searching);
+    }
+
+    // Update active question if changed
+    const question = msg.active_question || null;
+    if (question !== state.activeQuestion) {
+        state.activeQuestion = question;
+        if (!state.pinned) {
+            renderQuestion(question);
+        }
+    }
+
+    // Update answer if present in message
+    if (msg.active_answer) {
+        state.activeAnswer = msg.active_answer;
+        if (!state.pinned) {
+            renderAnswer(msg.active_answer);
+        }
+    }
+
+    if (!state.pinned) {
+        renderTranscript();
+    }
+}
+
+// --- Rendering ---
+function renderTranscript() {
+    const segments = state.pinned ? state.pinnedSegments : state.segments;
+    if (!segments) return;
+
+    const text = segments.map((seg) => seg.text).join(' ');
+    dom.transcriptContent.textContent = text;
+
+    if (!state.pinned) {
+        requestAnimationFrame(() => {
+            dom.transcriptScroll.scrollTop = dom.transcriptScroll.scrollHeight;
+        });
+    }
+}
+
+function setConnectionStatus(status) {
+    state.connected = status === 'connected';
+    dom.connectionStatus.textContent =
+        status === 'connected'
+            ? 'Connected'
+            : status === 'connecting'
+              ? 'Connecting...'
+              : 'Disconnected';
+    dom.connectionStatus.className = status;
+}
+
+function renderQuestion(questionText) {
+    dom.questionText.textContent = questionText || 'Listening...';
+    dom.questionText.classList.toggle('placeholder', !questionText);
+}
+
+function renderSearchingState(searching) {
+    dom.answerSearching.classList.toggle('hidden', !searching);
+    if (searching) {
+        dom.answerText.classList.add('hidden');
+    } else {
+        dom.answerText.classList.remove('hidden');
+    }
+}
+
+function toggleQuestionHistory() {
+    state.historyOpen = !state.historyOpen;
+    dom.questionHistoryPanel.classList.toggle('hidden', !state.historyOpen);
+    dom.btnQuestionHistory.classList.toggle('active', state.historyOpen);
+    if (state.historyOpen) {
+        renderQuestionHistory();
+    }
+}
+
+function renderQuestionHistory() {
+    dom.questionHistoryList.innerHTML = '';
+    // Show newest first
+    const items = [...state.questionHistory].reverse();
+    if (items.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No questions detected yet';
+        li.style.color = '#555';
+        li.style.fontStyle = 'italic';
+        li.style.cursor = 'default';
+        dom.questionHistoryList.appendChild(li);
+        return;
+    }
+    for (const q of items) {
+        const li = document.createElement('li');
+        li.textContent = q.text;
+        if (q.text === state.activeQuestion) {
+            li.classList.add('selected');
+        }
+        li.addEventListener('click', () => selectQuestion(q.text));
+        dom.questionHistoryList.appendChild(li);
+    }
+}
+
+async function selectQuestion(text) {
+    try {
+        await sendCommand('select_question', { text });
+        state.manualQuestion = true;
+        dom.btnAutoQuestion.classList.remove('active');
+        renderQuestion(text);
+        renderQuestionHistory();
+    } catch (err) {
+        console.error('[Question] Select failed:', err);
+    }
+}
+
+async function resumeAutoQuestion() {
+    if (!state.manualQuestion) return;
+    try {
+        await sendCommand('select_question', {});
+        state.manualQuestion = false;
+        dom.btnAutoQuestion.classList.add('active');
+    } catch (err) {
+        console.error('[Question] Resume auto failed:', err);
+    }
+}
+
+function renderAnswer(data) {
+    if (!data) return;
+
+    // Show "not found" hint when confidence is 0 and no evidence bullets
+    const noResults = !data.one_liner && (data.bullets || []).length === 0;
+    const lowConfidence = data.confidence === 0 && (data.bullets || []).length === 0;
+
+    if (lowConfidence && data.one_liner) {
+        dom.answerText.textContent = data.one_liner;
+        dom.answerText.classList.remove('placeholder');
+    } else {
+        dom.answerText.textContent = data.one_liner || 'Waiting for question...';
+        dom.answerText.classList.toggle('placeholder', !data.one_liner);
+    }
+
+    // Evidence-backed bullets
+    dom.bulletList.innerHTML = '';
+    if (lowConfidence) {
+        const li = document.createElement('li');
+        li.className = 'not-found-hint';
+        li.textContent = 'No matching information found in project sources';
+        dom.bulletList.appendChild(li);
+    }
+    (data.bullets || []).forEach((b) => {
+        const li = document.createElement('li');
+        li.textContent = b;
+        dom.bulletList.appendChild(li);
+    });
+
+    // Best practice bullets (not from sources)
+    const bpBullets = data.best_practice_bullets || [];
+    dom.bestPracticeList.innerHTML = '';
+    bpBullets.forEach((b) => {
+        const li = document.createElement('li');
+        li.textContent = b;
+        dom.bestPracticeList.appendChild(li);
+    });
+    dom.bestPracticeSection.classList.toggle('hidden', bpBullets.length === 0);
+
+    // Clarifiers
+    dom.clarifierList.innerHTML = '';
+    (data.clarifiers || []).forEach((c) => {
+        const li = document.createElement('li');
+        li.textContent = c;
+        dom.clarifierList.appendChild(li);
+    });
+    dom.clarifierSection.classList.toggle('hidden', (data.clarifiers || []).length === 0);
+
+    // Citations with quotes
+    dom.citationList.innerHTML = '';
+    (data.citations || []).forEach((c) => {
+        const li = document.createElement('li');
+        const parts = [c.doc, c.section, c.page ? 'p.' + c.page : ''].filter(Boolean);
+        let text = parts.join(' - ');
+        if (c.quote) {
+            text += ': "' + c.quote + '"';
+        }
+        li.textContent = text;
+        dom.citationList.appendChild(li);
+    });
+    dom.citationsSummary.textContent = 'Citations (' + (data.citations || []).length + ')';
+}
