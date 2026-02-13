@@ -33,6 +33,7 @@ meeting-buddy-ingest = "ingest.cli:main"
 dev = [
   "pytest>=8.0",
   "ruff>=0.6.0",
+  "websockets>=13.0",
 ]
 
 [tool.ruff]
