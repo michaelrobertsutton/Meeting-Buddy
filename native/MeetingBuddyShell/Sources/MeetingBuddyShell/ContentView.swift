@@ -73,10 +73,11 @@ struct ContentView: View {
         .padding(12)
         .frame(width: 420, height: 700)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        // glass edge
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.12), lineWidth: 0.5)
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.10), lineWidth: 0.5)
         )
         .padding(8)
     }
