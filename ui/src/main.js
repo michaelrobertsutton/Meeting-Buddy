@@ -69,6 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Header project switcher
     dom.headerProject = document.getElementById('header-project');
+    dom.quickQuestion = document.getElementById('quick-question');
 
     // Question history
     dom.btnAutoQuestion = document.getElementById('btn-auto-question');
@@ -137,6 +138,23 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.headerProject.addEventListener('change', headerSwitchProject);
     dom.btnAutoQuestion.addEventListener('click', resumeAutoQuestion);
     dom.btnQuestionHistory.addEventListener('click', toggleQuestionHistory);
+
+    // Quick-type question override
+    dom.quickQuestion.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            setManualQuestionFromInput();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            dom.quickQuestion.value = '';
+            setManualQuestionFromInput();
+            dom.quickQuestion.blur();
+        }
+    });
+    dom.quickQuestion.addEventListener('blur', () => {
+        // Commit whatever is in the box on blur (useful after paste)
+        setManualQuestionFromInput();
+    });
 
     // Enter key for inputs
     dom.apiKeyInput.addEventListener('keydown', (e) => {
@@ -695,6 +713,12 @@ function handleMessage(msg) {
     // Track manual mode
     state.manualQuestion = !!msg.manual_question;
     dom.btnAutoQuestion.classList.toggle('active', !state.manualQuestion);
+    document.body.classList.toggle('manual-question', state.manualQuestion);
+
+    // If manual mode turned off by server (e.g., timeout), clear the quick input
+    if (!state.manualQuestion && dom.quickQuestion && dom.quickQuestion.value) {
+        dom.quickQuestion.value = '';
+    }
 
     // Update synthesis searching state
     if (msg.synthesis_searching !== undefined) {
@@ -801,7 +825,10 @@ async function selectQuestion(text) {
     try {
         await sendCommand('select_question', { text });
         state.manualQuestion = true;
+        document.body.classList.add('manual-question');
         dom.btnAutoQuestion.classList.remove('active');
+        // Sync quick input
+        if (dom.quickQuestion) dom.quickQuestion.value = text || '';
         renderQuestion(text);
         renderQuestionHistory();
     } catch (err) {
@@ -809,12 +836,31 @@ async function selectQuestion(text) {
     }
 }
 
+let _quickQuestionTimer = null;
+async function setManualQuestionFromInput() {
+    if (!dom.quickQuestion) return;
+    const text = dom.quickQuestion.value.trim();
+
+    // Debounce rapid typing/blur
+    if (_quickQuestionTimer) clearTimeout(_quickQuestionTimer);
+    _quickQuestionTimer = setTimeout(async () => {
+        try {
+            await sendCommand('set_question', { text });
+            // UI state will also be updated from server snapshot/update
+        } catch (err) {
+            console.error('[Question] set_question failed:', err);
+        }
+    }, 150);
+}
+
 async function resumeAutoQuestion() {
     if (!state.manualQuestion) return;
     try {
         await sendCommand('select_question', {});
         state.manualQuestion = false;
+        document.body.classList.remove('manual-question');
         dom.btnAutoQuestion.classList.add('active');
+        if (dom.quickQuestion) dom.quickQuestion.value = '';
     } catch (err) {
         console.error('[Question] Resume auto failed:', err);
     }

@@ -113,6 +113,7 @@ class TranscriptWebSocket:
             "login_status": self._cmd_login_status,
             "logout": self._cmd_logout,
             "select_question": self._cmd_select_question,
+            "set_question": self._cmd_set_question,
             "export_session": self._cmd_export_session,
         }
 
@@ -421,6 +422,22 @@ class TranscriptWebSocket:
         self._extractor.select_question(text)
         # Trigger synthesis for the selected question
         if text and self._synthesis_engine:
+            asyncio.create_task(self._run_synthesis(text))
+        return {"selected": text}
+
+    async def _cmd_set_question(self, params: dict) -> dict:
+        """Manually override the active question with free-form text."""
+        text = (params.get("text") or "").strip()
+        if not self._extractor:
+            raise RuntimeError("Question extractor not available")
+
+        # Empty string = clear manual override
+        if not text:
+            self._extractor.select_question(None)
+            return {"selected": None}
+
+        self._extractor.select_question(text)
+        if self._synthesis_engine:
             asyncio.create_task(self._run_synthesis(text))
         return {"selected": text}
 
