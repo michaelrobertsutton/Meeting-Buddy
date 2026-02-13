@@ -44,3 +44,7 @@ audio-capture/.build/
 # User data (local)
 # ~/.meeting-buddy/ is outside repo, but just in case
 *.lance/
+
+.venv_lint/
+.venv_test/
+

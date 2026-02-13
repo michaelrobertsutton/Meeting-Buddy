@@ -29,5 +29,22 @@ dependencies = [
 meeting-buddy = "backend.main:main"
 meeting-buddy-ingest = "ingest.cli:main"
 
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = ["E501"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
 [tool.setuptools.packages.find]
 include = ["backend*", "ingest*", "scripts*"]

@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import logging
 import queue
+from math import gcd
 
 import numpy as np
 import sounddevice as sd
 from scipy.signal import resample_poly
-from math import gcd
 
 from backend.config import AudioConfig
 

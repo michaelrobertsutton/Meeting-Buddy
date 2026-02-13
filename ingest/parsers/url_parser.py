@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -37,7 +36,7 @@ class URLParser:
                         raise ValueError(f"Failed to fetch URL: HTTP {resp.status}")
                     html_content = await resp.text(encoding="utf-8", errors="replace")
             except aiohttp.ClientError as e:
-                raise ValueError(f"Failed to fetch URL: {e}")
+                raise ValueError(f"Failed to fetch URL: {e}") from e
 
         soup = BeautifulSoup(html_content, "html.parser")
 

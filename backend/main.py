@@ -6,14 +6,14 @@ import signal
 import sys
 from pathlib import Path
 
-from backend.audio.sck_capture import SCKCapture
 from backend.asr.engine import ASREngine
 from backend.asr.streaming import StreamingASR
 from backend.asr.vad import VADFilter
+from backend.audio.sck_capture import SCKCapture
+from backend.auth.oauth import TokenManager
 from backend.config import AppConfig
 from backend.question.extractor import ActiveQuestionExtractor
 from backend.server.websocket import TranscriptWebSocket
-from backend.auth.oauth import OAuthConfig, TokenManager
 from backend.settings import SettingsManager
 from backend.transcript.buffer import TranscriptBuffer
 
