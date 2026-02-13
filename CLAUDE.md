@@ -106,10 +106,8 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 - ChatGPT Plus OAuth uses `chatgpt.com/backend-api/codex/responses`, NOT `api.openai.com/v1`
 
 ## Feature Roadmap
-See `memory/FEATURE_PLAN.md` for the full roadmap. Phases G-J are complete:
-- ✅ G: Manual question override, pre-meeting prep mode, document context & priority
-- ✅ H: Session Q&A history, transcript context in synthesis, streaming answers
-- ✅ I: Quick-pin answers, URL ingestion, confidence styling
-- ✅ J: Post-meeting export, smart question staleness
+See `ROADMAP.md` (and GitHub Issues/labels) for the roadmap and current work queue.
 
-Future phases continue in the roadmap document.
+High-level status:
+- ✅ Phases **G–J** implemented
+- ✅ Phase **UI** (macOS redesign) implemented
