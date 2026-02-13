@@ -38,7 +38,8 @@ html, body {
 
 body {
     /* With macOS vibrancy, keep tint minimal so the material shows through */
-    background: transparent;
+    /* Fallback dark background if transparency fails */
+    background: var(--mb-bg);
     border-radius: var(--mb-radius-lg);
     border: 1px solid var(--mb-border);
     display: flex;
@@ -60,7 +61,7 @@ body {
 #drag-handle .title {
     font-size: 11px;
     font-weight: 600;
-    color: #999;
+    color: var(--mb-text-secondary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
 }
@@ -96,7 +97,7 @@ body {
     border-radius: 6px;
     padding: 4px 8px;
     font-size: 11px;
-    color: #e6e6e6;
+    color: var(--mb-text);
     outline: none;
 }
 
@@ -115,7 +116,7 @@ body.manual-question #quick-question {
 }
 
 #header-project:empty, #header-project.no-project {
-    color: #555;
+    color: var(--mb-text-tertiary);
 }
 
 #drag-handle .controls {
@@ -126,7 +127,7 @@ body.manual-question #quick-question {
 #drag-handle .controls button {
     background: none;
     border: none;
-    color: #777;
+    color: var(--mb-text-secondary);
     cursor: pointer;
     padding: 2px 6px;
     border-radius: 4px;
@@ -142,7 +143,7 @@ body.manual-question #quick-question {
 
 #drag-handle .controls button:hover {
     background: rgba(255, 255, 255, 0.1);
-    color: #ccc;
+    color: var(--mb-text);
 }
 
 #drag-handle .controls button.active {
@@ -164,7 +165,7 @@ body.manual-question #quick-question {
 .section h3 {
     font-size: 10px;
     font-weight: 600;
-    color: #666;
+    color: var(--mb-text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     margin-bottom: 4px;
@@ -176,12 +177,12 @@ body.manual-question #quick-question {
 }
 
 .placeholder {
-    color: #555;
+    color: var(--mb-text-tertiary);
     font-style: italic;
 }
 
 .hidden {
-    display: none;
+    display: none !important;
 }
 
 /* --- Answer Card (Phase UI) --- */
@@ -285,7 +286,7 @@ body:not(.has-question) .answer-card {
 .qh-btn {
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    color: #666;
+    color: var(--mb-text-tertiary);
     border-radius: 4px;
     padding: 1px 6px;
     font-size: 10px;
@@ -295,7 +296,7 @@ body:not(.has-question) .answer-card {
 
 .qh-btn:hover {
     background: rgba(255, 255, 255, 0.06);
-    color: #999;
+    color: var(--mb-text-secondary);
 }
 
 .qh-btn.active {
@@ -317,7 +318,8 @@ body:not(.has-question) .answer-card {
     margin-top: 4px;
     max-height: 120px;
     overflow-y: auto;
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid var(--mb-border-subtle);
     border-radius: 6px;
     padding: 2px;
 }
@@ -330,7 +332,7 @@ body:not(.has-question) .answer-card {
 #question-history-list li {
     padding: 4px 8px;
     font-size: 12px;
-    color: #aaa;
+    color: var(--mb-text-secondary);
     cursor: pointer;
     border-radius: 4px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
@@ -342,7 +344,7 @@ body:not(.has-question) .answer-card {
 
 #question-history-list li:hover {
     background: rgba(79, 195, 247, 0.1);
-    color: #ccc;
+    color: var(--mb-text);
 }
 
 #question-history-list li.selected {
@@ -357,7 +359,7 @@ body:not(.has-question) .answer-card {
 
 #question-history-list li .qh-rank {
     font-size: 10px;
-    color: #666;
+    color: var(--mb-text-tertiary);
     font-weight: 600;
     min-width: 16px;
 }
@@ -365,7 +367,7 @@ body:not(.has-question) .answer-card {
 #question-history-list li .qh-score {
     margin-left: auto;
     font-size: 10px;
-    color: #555;
+    color: var(--mb-text-tertiary);
     font-weight: 400;
 }
 
@@ -381,7 +383,8 @@ body:not(.has-question) .answer-card {
     padding: 4px 6px;
     border-radius: 4px;
     margin-bottom: 2px;
-    background: rgba(0, 0, 0, 0.15);
+    background: rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--mb-border-subtle);
     cursor: pointer;
     transition: background 0.15s ease, transform 0.05s ease;
 }
@@ -569,7 +572,7 @@ body:not(.has-question) .answer-card {
 #citations summary {
     font-size: 10px;
     font-weight: 600;
-    color: #666;
+    color: var(--mb-text-tertiary);
     text-transform: uppercase;
     letter-spacing: 0.5px;
     cursor: pointer;
@@ -583,7 +586,7 @@ body:not(.has-question) .answer-card {
 
 #citation-list li {
     font-size: 11px;
-    color: #888;
+    color: var(--mb-text-secondary);
     padding: 2px 0;
 }
 
@@ -596,7 +599,8 @@ body:not(.has-question) .answer-card {
     line-height: 1.45;
     color: var(--mb-text);
     padding: 6px 8px;
-    background: color-mix(in srgb, rgba(0, 0, 0, 0.22) 60%, transparent);
+    background: color-mix(in srgb, rgba(0, 0, 0, 0.35) 70%, transparent);
+    border: 1px solid var(--mb-border-subtle);
     border-radius: var(--mb-radius-sm);
 
     /* Visual anchoring: fade older transcript towards the top */
@@ -859,7 +863,7 @@ body.pinned #drag-handle {
 
 .settings-status {
     font-size: 11px;
-    color: #888;
+    color: var(--mb-text-secondary);
     margin-top: 4px;
 }
 
@@ -869,7 +873,7 @@ body.pinned #drag-handle {
 .settings-hint {
     margin-top: 6px;
     font-size: 11px;
-    color: #666;
+    color: var(--mb-text-tertiary);
 }
 
 .settings-hint code {
@@ -934,12 +938,12 @@ body.pinned #drag-handle {
 #settings-drawer button.btn-secondary {
     background: rgba(255, 255, 255, 0.06);
     border-color: rgba(255, 255, 255, 0.1);
-    color: #999;
+    color: var(--mb-text-secondary);
 }
 
 #settings-drawer button.btn-secondary:hover {
     background: rgba(255, 255, 255, 0.12);
-    color: #ccc;
+    color: var(--mb-text);
 }
 
 #settings-drawer button.btn-danger {
@@ -993,7 +997,7 @@ body.pinned #drag-handle {
     align-items: center;
     padding: 6px 0;
     font-size: 12px;
-    color: #ccc;
+    color: var(--mb-text);
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
     gap: 8px;
 }
@@ -1017,7 +1021,7 @@ body.pinned #drag-handle {
 #doc-list li .doc-size {
     flex: 0 0 auto;
     font-size: 11px;
-    color: #777;
+    color: var(--mb-text-secondary);
     min-width: 64px;
     text-align: right;
 }
@@ -1061,7 +1065,7 @@ body.pinned #drag-handle {
 }
 
 #doc-list .empty-msg {
-    color: #555;
+    color: var(--mb-text-tertiary);
     font-style: italic;
     font-size: 11px;
     padding: 4px 0;
@@ -1091,7 +1095,7 @@ body.pinned #drag-handle {
 }
 
 #prep-list .prep-a {
-    color: #888;
+    color: var(--mb-text-secondary);
     font-size: 11px;
 }
 
@@ -1120,7 +1124,7 @@ body.pinned #drag-handle {
 }
 
 #pinned-list .pinned-a {
-    color: #aaa;
+    color: var(--mb-text-secondary);
     font-size: 11px;
     margin-bottom: 6px;
 }
@@ -1133,7 +1137,7 @@ body.pinned #drag-handle {
 #pinned-list .btn-secondary {
     border: 1px solid rgba(255, 255, 255, 0.12);
     background: rgba(255, 255, 255, 0.05);
-    color: #ccc;
+    color: var(--mb-text);
     border-radius: 6px;
     padding: 4px 8px;
     font-size: 11px;
@@ -1224,13 +1228,13 @@ body.pinned #drag-handle {
 
 .fallback-summary {
     font-size: 11px;
-    color: #666;
+    color: var(--mb-text-tertiary);
     cursor: pointer;
     margin-top: 8px;
 }
 
 .fallback-summary:hover {
-    color: #999;
+    color: var(--mb-text-secondary);
 }
 
 /* --- Settings window (NavigationSplitView-ish) --- */
