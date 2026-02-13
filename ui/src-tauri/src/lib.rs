@@ -2,6 +2,9 @@ use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 
+#[cfg(target_os = "macos")]
+use tauri_plugin_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
+
 /// Holds the backend sidecar child process so we can kill it on app exit.
 struct BackendChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
@@ -19,6 +22,15 @@ pub fn run() {
                     .level(log::LevelFilter::Info)
                     .build(),
             )?;
+
+            // --- macOS HUD styling: vibrancy (ultra-thin material) ---
+            #[cfg(target_os = "macos")]
+            {
+                if let Some(window) = app.get_webview_window("overlay") {
+                    // Glassy background behind the WebView. Border/radius are handled by CSS.
+                    let _ = apply_vibrancy(&window, NSVisualEffectMaterial::UltraThin, None, None);
+                }
+            }
 
             // --- Spawn the Python backend sidecar ---
             let app_handle = app.handle().clone();
@@ -124,7 +136,7 @@ pub fn run() {
                                         let _ = window.hide();
                                     } else {
                                         let _ = window.show();
-                                        let _ = window.set_focus();
+                                        // Intentionally do NOT focus the window (non-activating HUD behavior)
                                     }
                                 }
                             } else if shortcut == &pin_shortcut {

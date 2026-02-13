@@ -25,6 +25,8 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
 
+tauri-plugin-vibrancy = "2"
+
 [profile.dev]
 opt-level = 0
 codegen-units = 256
