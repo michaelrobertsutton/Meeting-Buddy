@@ -41,8 +41,8 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/AudioCapture",
-      "binaries/meeting-buddy-backend"
+      "AudioCapture",
+      "meeting-buddy-backend"
     ]
   }
 }

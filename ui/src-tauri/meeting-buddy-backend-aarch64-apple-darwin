@@ -10,16 +10,17 @@ elif [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
     # Running from .app bundle
     # .app is at <project>/ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app
     # SCRIPT_DIR = .../Meeting Buddy.app/Contents/MacOS
+    # From .app root: macos/ -> bundle/ -> release/ -> target/ -> src-tauri/ -> ui/ -> project
     APP_BUNDLE="$SCRIPT_DIR/../.."
-    PROJECT_ROOT="$(cd "$APP_BUNDLE/../../../../../.." 2>/dev/null && pwd)" || true
+    PROJECT_ROOT="$(cd "$APP_BUNDLE/../../../../../../.." 2>/dev/null && pwd)" || true
     if [ ! -f "$PROJECT_ROOT/backend/main.py" ]; then
         echo "ERROR: Cannot find project root (looked at $PROJECT_ROOT)." >&2
         echo "Set MEETINGBUDDY_PROJECT_ROOT env var to the Meeting Buddy repo root." >&2
         exit 1
     fi
 else
-    # Dev mode — script is at <project>/ui/src-tauri/binaries/
-    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../../.." && pwd)"
+    # Dev mode — script is at <project>/ui/src-tauri/
+    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 fi
 
 # --- Locate AudioCapture binary ---
