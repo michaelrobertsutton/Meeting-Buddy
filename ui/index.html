@@ -223,11 +223,11 @@
                     <div class="perm-title">Microphone</div>
                     <div class="perm-desc">Optional, but recommended if you want mic audio capture.</div>
                 </div>
-                <button id="btn-open-mic" class="btn-primary">Open System Settings</button>
+                <button id="btn-open-mic" class="btn-primary" onclick="if(window.__openMicSettings) window.__openMicSettings(); return false;">Open System Settings (or Cmd+M)</button>
             </div>
 
             <div class="modal-actions">
-                <button id="btn-onboarding-done" class="btn-secondary">Done</button>
+                <button id="btn-onboarding-done" class="btn-secondary" onclick="if(window.__hideOnboarding) window.__hideOnboarding(); return false;">Done (or press Escape)</button>
             </div>
         </div>
     </div>
