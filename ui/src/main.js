@@ -367,6 +367,72 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Attach handlers immediately
     attachOnboardingHandlers();
+    
+    // CRITICAL: Add keyboard shortcuts as fallback
+    // Escape key = dismiss overlay
+    // Cmd+S = open Screen Recording settings
+    // Cmd+M = open Microphone settings
+    document.addEventListener('keydown', async (e) => {
+        // Only handle if onboarding is visible
+        if (!dom.onboarding || dom.onboarding.classList.contains('hidden')) {
+            return;
+        }
+        
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Onboarding] Escape key pressed - dismissing overlay');
+            hideOnboarding();
+        } else if ((e.metaKey || e.ctrlKey) && e.key === 's') {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Onboarding] Cmd+S pressed - opening Screen Recording settings');
+            try {
+                const { open } = window.__TAURI__.shell;
+                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+            } catch (err) {
+                console.error('[Onboarding] Failed:', err);
+            }
+        } else if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Onboarding] Cmd+M pressed - opening Microphone settings');
+            try {
+                const { open } = window.__TAURI__.shell;
+                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+            } catch (err) {
+                console.error('[Onboarding] Failed:', err);
+            }
+        }
+    });
+    
+    // Also try direct button access via onclick attribute as absolute fallback
+    if (dom.btnOnboardingDone) {
+        dom.btnOnboardingDone.setAttribute('onclick', 'window.__hideOnboarding && window.__hideOnboarding()');
+        window.__hideOnboarding = hideOnboarding;
+    }
+    if (dom.btnOpenScreen) {
+        dom.btnOpenScreen.setAttribute('onclick', 'window.__openScreenSettings && window.__openScreenSettings()');
+        window.__openScreenSettings = async () => {
+            try {
+                const { open } = window.__TAURI__.shell;
+                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+            } catch (err) {
+                console.error('[Onboarding] Failed:', err);
+            }
+        };
+    }
+    if (dom.btnOpenMic) {
+        dom.btnOpenMic.setAttribute('onclick', 'window.__openMicSettings && window.__openMicSettings()');
+        window.__openMicSettings = async () => {
+            try {
+                const { open } = window.__TAURI__.shell;
+                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+            } catch (err) {
+                console.error('[Onboarding] Failed:', err);
+            }
+        };
+    }
 
     // Check permissions and show onboarding if needed
     async function checkAndShowOnboarding() {
