@@ -124,9 +124,14 @@ pub fn run() {
                 };
 
                 let toggle_shortcut =
-                    Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyM);
+                    Shortcut::new(Some(Modifiers::ALT), Code::Space);
                 let pin_shortcut =
                     Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyP);
+
+                let settings_shortcut =
+                    Shortcut::new(Some(Modifiers::META), Code::Comma);
+                let clear_shortcut =
+                    Shortcut::new(Some(Modifiers::META), Code::KeyK);
 
                 let app_handle = app.handle().clone();
 
@@ -150,6 +155,14 @@ pub fn run() {
                                 if let Some(window) = app_handle.get_webview_window("overlay") {
                                     let _ = window.emit("toggle-pin", ());
                                 }
+                            } else if shortcut == &settings_shortcut {
+                                if let Some(window) = app_handle.get_webview_window("overlay") {
+                                    let _ = window.emit("open-settings", ());
+                                }
+                            } else if shortcut == &clear_shortcut {
+                                if let Some(window) = app_handle.get_webview_window("overlay") {
+                                    let _ = window.emit("clear-session", ());
+                                }
                             }
                         })
                         .build(),
@@ -157,6 +170,8 @@ pub fn run() {
 
                 app.global_shortcut().register(toggle_shortcut)?;
                 app.global_shortcut().register(pin_shortcut)?;
+                app.global_shortcut().register(settings_shortcut)?;
+                app.global_shortcut().register(clear_shortcut)?;
             }
 
             Ok(())
