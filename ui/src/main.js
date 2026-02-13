@@ -20,6 +20,8 @@ const state = {
     pinnedAnswers: [],
 
     streamingAnswer: null,  // Partial text being streamed
+
+    lastTranscriptAtMs: 0,
 };
 
 const WS_URL = 'ws://localhost:8765';
@@ -86,6 +88,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.citationList = document.getElementById('citation-list');
     dom.transcriptContent = document.getElementById('transcript-content');
     dom.transcriptScroll = document.getElementById('transcript-scroll');
+    dom.transcriptQuiet = document.getElementById('transcript-quiet');
     dom.connectionStatus = document.getElementById('connection-status');
     dom.pinStatus = document.getElementById('pin-status');
     dom.btnPin = document.getElementById('btn-pin');
@@ -927,6 +930,9 @@ function handleMessage(msg) {
 
     state.version = msg.version;
     state.segments = msg.segments || [];
+    if (state.segments.length > 0) {
+        state.lastTranscriptAtMs = Date.now();
+    }
 
     // Update question history
     if (msg.question_history) {
@@ -990,12 +996,52 @@ function handleMessage(msg) {
 }
 
 // --- Rendering ---
+function _splitSentences(text) {
+    if (!text) return [];
+    // Simple heuristic split; good enough for display anchoring.
+    return text
+        .split(/(?<=[.!?])\s+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+}
+
 function renderTranscript() {
     const segments = state.pinned ? state.pinnedSegments : state.segments;
     if (!segments) return;
 
-    const text = segments.map((seg) => seg.text).join(' ');
-    dom.transcriptContent.textContent = text;
+    // Flatten segments to sentences
+    const sentences = [];
+    for (const seg of segments) {
+        for (const s of _splitSentences(seg.text)) sentences.push(s);
+    }
+
+    // Quiet state
+    const now = Date.now();
+    const last = state.lastTranscriptAtMs || 0;
+    const quiet = sentences.length === 0 || (now - last) > 3000;
+    if (dom.transcriptQuiet) dom.transcriptQuiet.classList.toggle('hidden', !quiet);
+
+    // Render as stacked lines with recency-based opacity
+    dom.transcriptContent.innerHTML = '';
+    const total = sentences.length;
+    for (let i = 0; i < total; i++) {
+        const line = document.createElement('div');
+        line.className = 'transcript-line';
+        line.textContent = sentences[i];
+
+        // Last 2–3 sentences at full opacity, older fade toward ~0.4.
+        const age = total - 1 - i;
+        let opacity = 1.0;
+        if (age >= 3) {
+            // Map older lines to [0.4..0.9] range
+            const t = Math.min(1, (age - 3) / 14);
+            opacity = 0.9 - 0.5 * t;
+            opacity = Math.max(0.4, opacity);
+        }
+        line.style.opacity = String(opacity);
+
+        dom.transcriptContent.appendChild(line);
+    }
 
     if (!state.pinned) {
         requestAnimationFrame(() => {
