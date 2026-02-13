@@ -47,6 +47,23 @@ function sendCommand(command, params = {}) {
     });
 }
 
+async function ensureConnected(timeoutMs = 4000) {
+    // If already open, done
+    if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
+
+    // If no ws or it's closed, start a connection attempt
+    if (!state.ws || state.ws.readyState === WebSocket.CLOSED) {
+        connectWebSocket();
+    }
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+        if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
+        await new Promise((r) => setTimeout(r, 100));
+    }
+    throw new Error('Not connected');
+}
+
 // --- DOM References ---
 const dom = {};
 
@@ -313,13 +330,18 @@ async function startLogin() {
     dom.loginStatus.className = 'settings-status';
 
     try {
+        await ensureConnected();
         const data = await sendCommand('start_login');
         // Open auth URL in default browser via Tauri shell plugin
         const { open } = window.__TAURI__.shell;
         await open(data.auth_url);
         dom.loginStatus.textContent = 'Waiting for login in browser...';
     } catch (err) {
-        dom.loginStatus.textContent = 'Error: ' + err.message;
+        if (err.message === 'Not connected') {
+            dom.loginStatus.textContent = 'Backend not connected. Start the backend (python -m backend.main) and try again.';
+        } else {
+            dom.loginStatus.textContent = 'Error: ' + err.message;
+        }
         dom.loginStatus.className = 'settings-status error';
         dom.btnLogin.disabled = false;
     }
@@ -908,6 +930,15 @@ function setConnectionStatus(status) {
               ? 'Connecting...'
               : 'Disconnected';
     dom.connectionStatus.className = status;
+
+    // Disable login when backend isn't reachable
+    if (dom.btnLogin) {
+        dom.btnLogin.disabled = !state.connected;
+        if (!state.connected && state.settingsOpen && dom.loginStatus && !dom.loginStatus.textContent) {
+            dom.loginStatus.textContent = 'Backend not connected.';
+            dom.loginStatus.className = 'settings-status error';
+        }
+    }
 }
 
 function renderQuestion(questionText) {
