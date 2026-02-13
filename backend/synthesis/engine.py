@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
 import aiohttp
@@ -80,15 +81,30 @@ class SynthesisEngine:
         self._last_question = None
         self._last_result = None
 
-    async def synthesize(self, question: str) -> SynthesisResult | None:
+    async def synthesize(self, question: str, transcript_context: str | None = None) -> SynthesisResult | None:
         """Synthesize an answer for the given question. Returns None if unchanged."""
         if question == self._last_question:
             return None
 
         self._last_question = question
-        result = await self._synthesize_uncached(question)
+        result = await self._synthesize_uncached(question, transcript_context=transcript_context)
         self._last_result = result
         return result
+
+    async def synthesize_stream(
+        self, question: str, transcript_context: str | None = None
+    ) -> AsyncGenerator[str, None]:
+        """
+        Synthesize with streaming. Yields partial text deltas.
+        Caller should accumulate and parse final JSON.
+        """
+        if question == self._last_question:
+            # Return cached result - no streaming needed
+            return
+
+        self._last_question = question
+        async for delta in self._synthesize_stream_uncached(question, transcript_context=transcript_context):
+            yield delta
 
     async def synthesize_batch(self, questions: list[str]) -> dict[str, SynthesisResult]:
         """Synthesize a batch of questions (no last-question caching)."""
@@ -123,7 +139,7 @@ class SynthesisEngine:
             temperature=temperature if temperature is not None else self._config.temperature,
         )
 
-    async def _synthesize_uncached(self, question: str) -> SynthesisResult:
+    async def _synthesize_uncached(self, question: str, transcript_context: str | None = None) -> SynthesisResult:
         # Retrieve context chunks
         results = []
         if self._retriever:
@@ -140,7 +156,9 @@ class SynthesisEngine:
             except Exception:
                 doc_registry = None
 
-        user_prompt = build_user_prompt(question, results, doc_registry=doc_registry)
+        user_prompt = build_user_prompt(
+            question, results, doc_registry=doc_registry, transcript_context=transcript_context
+        )
 
         try:
             if self._oauth_token and self._chatgpt_account_id:
@@ -272,3 +290,96 @@ class SynthesisEngine:
         if not full_text:
             raise RuntimeError("No text output in ChatGPT backend response")
         return full_text
+
+    async def _synthesize_stream_uncached(
+        self, question: str, transcript_context: str | None = None
+    ) -> AsyncGenerator[str, None]:
+        """Synthesize with streaming support. Yields text deltas."""
+        # Retrieve context chunks
+        results = []
+        if self._retriever:
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(
+                None, self._retriever.retrieve, question
+            )
+            logger.info("Retrieved %d chunks for synthesis", len(results))
+
+        doc_registry = None
+        if self._retriever and hasattr(self._retriever, "get_doc_registry"):
+            try:
+                doc_registry = self._retriever.get_doc_registry()
+            except Exception:
+                doc_registry = None
+
+        user_prompt = build_user_prompt(
+            question, results, doc_registry=doc_registry, transcript_context=transcript_context
+        )
+
+        # Stream deltas
+        if self._oauth_token and self._chatgpt_account_id:
+            async for delta in self._call_chatgpt_backend_stream(user_prompt):
+                yield delta
+        else:
+            async for delta in self._call_openai_api_stream(user_prompt):
+                yield delta
+
+    async def _call_openai_api_stream(self, user_prompt: str) -> AsyncGenerator[str, None]:
+        """OpenAI API streaming call."""
+        response = await self._client.chat.completions.create(
+            model=self._config.model,
+            temperature=self._config.temperature,
+            max_tokens=self._config.max_tokens,
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            stream=True,
+        )
+        async for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
+
+    async def _call_chatgpt_backend_stream(self, user_prompt: str) -> AsyncGenerator[str, None]:
+        """ChatGPT backend streaming call."""
+        headers = {
+            "Authorization": f"Bearer {self._oauth_token}",
+            "Content-Type": "application/json",
+            "User-Agent": _USER_AGENT,
+            "chatgpt-account-id": self._chatgpt_account_id,
+            "originator": "codex_cli_rs",
+        }
+        payload = {
+            "model": self._oauth_model,
+            "instructions": SYSTEM_PROMPT,
+            "input": [
+                {"role": "user", "content": user_prompt},
+            ],
+            "stream": True,
+            "store": False,
+        }
+
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                _CHATGPT_BACKEND_URL, headers=headers, json=payload
+            ) as resp:
+                if resp.status != 200:
+                    body = await resp.text()
+                    raise RuntimeError(f"ChatGPT backend error ({resp.status}): {body[:500]}")
+
+                async for raw_line in resp.content:
+                    line = raw_line.decode("utf-8").strip()
+                    if not line.startswith("data: "):
+                        continue
+                    data_str = line[6:]
+                    if data_str == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(data_str)
+                    except json.JSONDecodeError:
+                        continue
+                    etype = event.get("type", "")
+                    if etype == "response.output_text.delta":
+                        delta = event.get("delta", "")
+                        if delta:
+                            yield delta

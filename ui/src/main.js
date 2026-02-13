@@ -16,6 +16,7 @@ const state = {
     qaHistory: [],
     prepQuestions: [],
     prepResults: {},
+    streamingAnswer: null,  // Partial text being streamed
 };
 
 const WS_URL = 'ws://localhost:8765';
@@ -791,18 +792,30 @@ function handleMessage(msg) {
     // Handle synthesis searching event
     if (msg.type === 'synthesis_searching') {
         state.synthesisSearching = true;
+        state.streamingAnswer = null;
         renderSearchingState(true);
         return;
     }
     if (msg.type === 'synthesis_error') {
         state.synthesisSearching = false;
+        state.streamingAnswer = null;
         renderSearchingState(false);
+        return;
+    }
+
+    // Handle streaming partial answer updates
+    if (msg.type === 'answer_partial') {
+        if (!state.pinned) {
+            state.streamingAnswer = msg.partial_text || '';
+            renderStreamingAnswer(state.streamingAnswer);
+        }
         return;
     }
 
     // Handle answer_update independently (no version check)
     if (msg.type === 'answer_update') {
         state.synthesisSearching = false;
+        state.streamingAnswer = null;
         renderSearchingState(false);
         if (msg.active_answer && !state.pinned) {
             state.activeAnswer = msg.active_answer;
@@ -904,11 +917,20 @@ function renderQuestion(questionText) {
 
 function renderSearchingState(searching) {
     dom.answerSearching.classList.toggle('hidden', !searching);
-    if (searching) {
+    if (searching && !state.streamingAnswer) {
         dom.answerText.classList.add('hidden');
     } else {
         dom.answerText.classList.remove('hidden');
     }
+}
+
+function renderStreamingAnswer(partialText) {
+    if (!partialText) return;
+    dom.answerText.textContent = partialText;
+    dom.answerText.classList.remove('placeholder');
+    dom.answerText.classList.add('streaming');
+    // Show searching indicator while streaming
+    dom.answerSearching.classList.remove('hidden');
 }
 
 function toggleQuestionHistory() {
@@ -1036,6 +1058,11 @@ async function resumeAutoQuestion() {
 
 function renderAnswer(data) {
     if (!data) return;
+
+    // Clear streaming state
+    state.streamingAnswer = null;
+    dom.answerText.classList.remove('streaming');
+    dom.answerSearching.classList.add('hidden');
 
     // Show "not found" hint when confidence is 0 and no evidence bullets
     const noResults = !data.one_liner && (data.bullets || []).length === 0;

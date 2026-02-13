@@ -320,6 +320,11 @@ body.manual-question #quick-question {
     color: #e0e0e0;
 }
 
+#answer p.streaming {
+    color: #81d4fa;
+    font-style: italic;
+}
+
 .not-found-hint {
     color: #ffa726;
     font-size: 11px;

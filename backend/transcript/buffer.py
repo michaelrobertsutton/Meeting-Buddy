@@ -62,6 +62,17 @@ class TranscriptBuffer:
         segments = self.get_segments()
         return " ".join(seg.text for seg in segments)
 
+    def get_recent_text(self, lookback_seconds: float = 90.0) -> str:
+        """Return concatenated text from segments within the last N seconds."""
+        segments = self.get_segments()
+        if not segments:
+            return ""
+        # Use end_time (relative audio time) to filter recent segments
+        now = segments[-1].end_time if segments else 0.0
+        cutoff = now - lookback_seconds
+        recent = [seg for seg in segments if seg.end_time >= cutoff]
+        return " ".join(seg.text for seg in recent)
+
     def get_version(self) -> int:
         """Return the current version counter (incremented on each add)."""
         with self._lock:
