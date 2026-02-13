@@ -19,8 +19,8 @@ from backend.transcript.buffer import TranscriptBuffer
 
 logger = logging.getLogger(__name__)
 
-# Project root — one level up from backend/
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# Project root — env var (sidecar mode) or one level up from backend/
+_PROJECT_ROOT = Path(os.environ["MEETINGBUDDY_PROJECT_ROOT"]) if os.environ.get("MEETINGBUDDY_PROJECT_ROOT") else Path(__file__).resolve().parent.parent
 
 
 def _parse_args() -> argparse.Namespace:
@@ -57,7 +57,12 @@ def main() -> None:
         logger.info("OAuth tokens loaded — API key available")
 
     # --- Resolve AudioCapture binary path ---
-    binary_path = _PROJECT_ROOT / config.audio.capture_binary
+    # Env var (set by sidecar script) overrides the default relative path
+    env_binary = os.environ.get("MEETINGBUDDY_AUDIO_BINARY")
+    if env_binary:
+        binary_path = Path(env_binary)
+    else:
+        binary_path = _PROJECT_ROOT / config.audio.capture_binary
     if not binary_path.is_file():
         logger.error(
             "AudioCapture binary not found at %s.\n"
