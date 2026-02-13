@@ -30,7 +30,9 @@ All audio and transcript data stays on your device. Only the active question + r
 - macOS 14+ (Apple Silicon recommended)
 - Python 3.9+ with venv
 - Rust (for Tauri UI): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- Screen Recording permission for Terminal.app (System Settings > Privacy & Security > Screen Recording)
+- **Screen Recording permission**:
+  - **Bundled app**: Grant permission to "Meeting Buddy" (System Settings > Privacy & Security > Screen Recording)
+  - **Development mode**: Grant permission to Terminal.app (System Settings > Privacy & Security > Screen Recording)
 
 No virtual audio driver needed — Meeting Buddy uses ScreenCaptureKit to capture system audio directly.
 
@@ -113,7 +115,18 @@ cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications
 
 ## Usage
 
-### Quick start (UI manages everything)
+### Running the Bundled App
+
+If you've built and installed the app bundle:
+
+1. **Launch "Meeting Buddy" from Applications** (or Spotlight)
+2. The app will automatically start the backend and display the overlay
+3. **Grant Screen Recording permission** when prompted — you must grant permission to **"Meeting Buddy"** (not Terminal.app) in System Settings > Privacy & Security > Screen Recording
+4. **Restart the app** after granting permissions if audio capture doesn't work immediately
+
+**Important:** Without Screen Recording permission, the app cannot capture audio and transcripts will not appear.
+
+### Development Mode (Quick start)
 
 ```bash
 source .venv/bin/activate
@@ -189,9 +202,12 @@ Settings like API key and active project persist in `~/.meeting-buddy/config.jso
 ## Troubleshooting
 
 **No transcript appearing**
-- Ensure Screen Recording permission is granted to Terminal.app
+- **Bundled app**: Ensure Screen Recording permission is granted to **"Meeting Buddy"** (System Settings > Privacy & Security > Screen Recording)
+- **Development mode**: Ensure Screen Recording permission is granted to **Terminal.app**
 - Play audio with clear speech (not just music)
 - Check that `audio-capture/.build/release/AudioCapture` exists (build with `swift build -c release`)
+- Verify audio is actually playing (check system volume)
+- Try restarting the app after granting permissions
 
 **Transcription is slow**
 - Switch to a smaller model: `model_size="tiny.en"` in `backend/config.py`
