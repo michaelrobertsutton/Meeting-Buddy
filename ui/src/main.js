@@ -227,6 +227,16 @@ document.addEventListener('DOMContentLoaded', () => {
     listen('toggle-pin', () => {
         togglePin();
     });
+    
+    // Listen for backend termination event
+    listen('backend-terminated', (event) => {
+        console.error('[Backend] Sidecar terminated with code:', event.payload);
+        setConnectionStatus('disconnected');
+        if (dom.backendStatus) {
+            dom.backendStatus.textContent = `Backend: Crashed (code ${event.payload})`;
+            dom.backendStatus.className = 'error';
+        }
+    });
 
     connectWebSocket();
 });
@@ -750,6 +760,10 @@ function renderIngestComplete(data) {
 let reconnectDelay = RECONNECT_DELAY_MS;
 let reconnectTimer = null;
 
+let _reconnectAttempts = 0;
+const MAX_RECONNECT_ATTEMPTS = 10;
+const RECONNECT_DELAY_MS = 2000;
+
 function connectWebSocket() {
     setConnectionStatus('connecting');
 
@@ -995,6 +1009,10 @@ function setConnectionStatus(status) {
         if (state.connected) {
             dom.backendStatus.textContent = 'Backend: Connected';
             dom.backendStatus.className = 'settings-status ok';
+            if (dom.backendHint) dom.backendHint.classList.add('hidden');
+        } else if (status === 'connecting') {
+            dom.backendStatus.textContent = 'Backend: Starting...';
+            dom.backendStatus.className = 'settings-status';
             if (dom.backendHint) dom.backendHint.classList.add('hidden');
         } else {
             dom.backendStatus.textContent = 'Backend: Disconnected';
