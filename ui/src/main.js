@@ -447,62 +447,56 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Check permissions and show onboarding if needed
     async function checkAndShowOnboarding() {
+        // If user already dismissed, never show again
+        if (localStorage.getItem('mb_onboarding_done')) {
+            console.log('[Onboarding] Previously dismissed, skipping');
+            return;
+        }
+
         try {
-            // Check Screen Recording permission first
             let hasPermission = false;
             try {
                 const { invoke } = window.__TAURI__.core;
                 hasPermission = await invoke('check_screen_recording_permission');
                 console.log('[Onboarding] Screen Recording permission status:', hasPermission);
             } catch (err) {
-                console.warn('[Onboarding] Failed to check permission:', err);
-                // If we cannot reliably check, don't show the overlay (avoid false positives).
+                console.warn('[Onboarding] Failed to check permission, skipping overlay:', err);
                 return;
             }
 
-            // If permission is granted, skip overlay entirely
+            // Permission granted — nothing to do
             if (hasPermission) {
-                console.log('[Onboarding] Permission already granted, skipping overlay');
-                hideOnboarding();
+                console.log('[Onboarding] Permission granted, skipping overlay');
                 return;
             }
 
-            // Check microphone permission so we only show mic row when it's not granted
+            // Check microphone permission
             let hasMicPermission = true;
             try {
                 const { invoke } = window.__TAURI__.core;
                 hasMicPermission = await invoke('check_microphone_permission');
-                console.log('[Onboarding] Microphone permission status:', hasMicPermission);
-            } catch (err) {
-                console.warn('[Onboarding] Failed to check mic permission:', err);
-                // On failure, show mic row (safe default)
-                hasMicPermission = false;
-            }
-            
-            // Check if user has manually dismissed onboarding before
-            // Only respect this if permission is still missing
-            if (localStorage.getItem('mb_onboarding_done')) {
-                console.log('[Onboarding] User previously dismissed, but permission still missing - showing again');
-            }
-            
-            // Permission not granted, show overlay
-            console.log('[Onboarding] Showing overlay - permission not granted');
-            showOnboarding();
+            } catch (_) {}
 
-            // Show microphone row only when mic permission is not granted
+            // Show overlay and start auto-dismiss timer
+            showOnboarding();
             if (dom.onboardingMicRow) {
                 dom.onboardingMicRow.classList.toggle('hidden', hasMicPermission);
             }
+
+            // Auto-dismiss after 30s as advertised
+            setTimeout(() => {
+                if (!dom.onboarding.classList.contains('hidden')) {
+                    console.log('[Onboarding] Auto-dismissing after 30s');
+                    hideOnboarding();
+                }
+            }, 30000);
+
         } catch (err) {
-            console.error('[Onboarding] Error checking permissions:', err);
-            // If permission check fails (invoke not available, etc.), do NOT block the user.
-            // They can still open Settings and resolve permissions as needed.
-            return;
+            console.error('[Onboarding] Error:', err);
         }
     }
     
     // Check permissions on startup (after DOM is ready)
-    // Delay slightly to ensure Tauri APIs are available
     setTimeout(() => {
         checkAndShowOnboarding();
     }, 100);
@@ -1423,6 +1417,9 @@ function renderQuestion(questionText) {
     dom.questionText.textContent = questionText || 'Listening...';
     dom.questionText.classList.toggle('placeholder', !questionText);
     document.body.classList.toggle('has-question', !!questionText);
+    if (!questionText) {
+        renderAnswer(null);
+    }
 }
 
 function renderSearchingState(searching) {
@@ -1721,7 +1718,22 @@ function renderPinnedAnswers() {
 }
 
 function renderAnswer(data) {
-    if (!data) return;
+    if (!data) {
+        document.body.classList.remove('has-answer-content');
+        dom.answerText.textContent = 'Waiting for question...';
+        dom.answerText.classList.add('placeholder');
+        dom.answerText.classList.remove('streaming');
+        dom.answerSearching.classList.add('hidden');
+        dom.answer.classList.remove('confidence-high', 'confidence-medium', 'confidence-low');
+        const warningLabel = dom.answer.querySelector('.confidence-warning');
+        if (warningLabel) warningLabel.remove();
+        dom.bulletList.innerHTML = '';
+        dom.bestPracticeList.innerHTML = '';
+        dom.bestPracticeSection.classList.add('hidden');
+        dom.clarifierList.innerHTML = '';
+        dom.clarifierSection.classList.add('hidden');
+        return;
+    }
 
     // Clear streaming state
     state.streamingAnswer = null;
@@ -1789,6 +1801,11 @@ function renderAnswer(data) {
         dom.bestPracticeList.appendChild(li);
     });
     dom.bestPracticeSection.classList.toggle('hidden', bpBullets.length === 0);
+
+    const hasAnswerContent = !!(data.one_liner && data.one_liner !== 'Waiting for question...') ||
+        ((data.bullets || []).length > 0) ||
+        ((data.best_practice_bullets || []).length > 0);
+    document.body.classList.toggle('has-answer-content', hasAnswerContent);
 
     // Clarifiers
     dom.clarifierList.innerHTML = '';

@@ -204,42 +204,59 @@ body.manual-question #quick-question {
     display: none !important;
 }
 
-/* --- Answer Card (Phase UI) --- */
+/* --- Answer Card (Phase UI) — Issue 118: High-contrast synthesis card --- */
 
 .answer-card {
     border-radius: var(--mb-radius-lg);
     border: 1px solid var(--mb-border);
-    background: color-mix(in srgb, rgba(0, 0, 0, 0.4) 80%, transparent);
-    padding: 10px 10px;
-
-    /* Motion + constraints */
-    max-height: 400px;
+    background: color-mix(in srgb, rgba(0, 0, 0, 0.5) 85%, transparent);
+    padding: 12px 14px;
+    max-height: 420px;
     overflow: hidden;
-    transition: transform 240ms ease, opacity 240ms ease;
+    /* Spring-like slide up: cubic-bezier approximates spring */
+    transition:
+        max-height 0.52s cubic-bezier(0.34, 1.56, 0.64, 1),
+        opacity 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+        padding 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        margin 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+        border-color 0.25s ease;
 }
 
-body.has-question .answer-card {
+body.has-question .answer-card,
+body.has-answer-content .answer-card {
     opacity: 1;
     transform: translateY(0);
+    max-height: 420px;
+    padding: 12px 14px;
+    margin-bottom: 0;
 }
 
-body:not(.has-question) .answer-card {
-    opacity: 0.75;
-    transform: translateY(4px);
+body:not(.has-question):not(.has-answer-content) .answer-card {
+    opacity: 0;
+    transform: translateY(12px);
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
+    border-color: transparent;
+    pointer-events: none;
 }
 
 .answer-card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 8px;
+    margin-bottom: 10px;
 }
 
+/* DIRECT ANSWER: #60B6F2, all caps, caption2 */
 .answer-card-label {
     font-size: 10px;
     font-weight: 700;
-    letter-spacing: 0.8px;
-    color: var(--mb-accent);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #60B6F2;
 }
 
 .answer-card-body {
@@ -249,34 +266,42 @@ body:not(.has-question) .answer-card {
 }
 
 .answer-card-body::-webkit-scrollbar { width: 4px; }
-.answer-card-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.14); border-radius: 2px; }
+.answer-card-body::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 2px; }
 
+/* Main answer: pure white, body weight */
 #answer-text {
     font-size: 13px;
-    font-weight: 600;
-    color: var(--mb-text);
+    font-weight: 400;
+    color: #FFFFFF;
+    line-height: 1.45;
     margin-bottom: 10px;
 }
 
 .answer-card-points-title {
     font-size: 11px;
     font-weight: 600;
-    color: color-mix(in srgb, var(--mb-text) 60%, transparent);
+    color: var(--mb-text-secondary);
     margin-bottom: 6px;
 }
 
 #bullet-list {
-    list-style: disc;
-    padding-left: 18px;
-    color: var(--mb-text);
+    list-style: none;
+    padding-left: 0;
+    color: #FFFFFF;
 }
 
 #bullet-list li {
     margin-bottom: 6px;
+    padding-left: 18px;
+    position: relative;
 }
 
-#bullet-list li::marker {
-    color: var(--mb-accent);
+#bullet-list li::before {
+    content: '\2022';
+    position: absolute;
+    left: 0;
+    color: #60B6F2;
+    font-weight: 700;
 }
 
 /* --- Question Section --- */
@@ -434,7 +459,13 @@ body:not(.has-question) .answer-card {
 #answer {
     border-radius: 6px;
     padding: 8px;
-    transition: border-color 0.2s ease;
+    transition: border-color 0.2s ease, padding 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), margin 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+body:not(.has-question):not(.has-answer-content) #answer {
+    padding-top: 0;
+    padding-bottom: 0;
+    margin-bottom: 0;
 }
 
 #answer.confidence-high {
@@ -492,11 +523,11 @@ body:not(.has-question) .answer-card {
 }
 
 #answer p {
-    color: #e0e0e0;
+    color: #FFFFFF;
 }
 
 #answer p.streaming {
-    color: #81d4fa;
+    color: #60B6F2;
     font-style: italic;
 }
 
@@ -505,24 +536,6 @@ body:not(.has-question) .answer-card {
     font-size: 11px;
     font-style: italic;
     margin-top: 2px;
-}
-
-#bullet-list {
-    list-style: none;
-    padding-left: 0;
-}
-
-#bullet-list li {
-    padding: 2px 0 2px 16px;
-    position: relative;
-    color: #ccc;
-}
-
-#bullet-list li::before {
-    content: '\2022';
-    position: absolute;
-    left: 4px;
-    color: #4fc3f7;
 }
 
 #bullet-list li.not-found-hint {
