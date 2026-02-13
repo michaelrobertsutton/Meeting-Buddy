@@ -1,31 +1,36 @@
-# MeetingBuddyShell (Native SwiftUI shell) — Spike scaffold
+# MeetingBuddyShell (native SwiftUI shell)
 
-This directory scaffolds the **Phase 1 spike** from `NATIVE_SHELL_PLAN.md` (Issue #83).
+This folder contains a **minimal SwiftUI/AppKit shell** to validate the Meeting Buddy WebSocket protocol and HUD behaviors.
 
-Goal: a native macOS SwiftUI/AppKit shell that opens a **non-activating NSPanel HUD** and connects to the existing backend WebSocket (`ws://localhost:8765`).
+## Open in Xcode
+This is a **Swift Package Manager (SPM)** target.
 
-## Status
-This is a **scaffold** only. It is intended to be opened/built with **Xcode**.
+- Open `native/MeetingBuddyShell/Package.swift` in Xcode
+- Select the `MeetingBuddyShell` scheme
+- Run
 
-On this machine, `xcodebuild` is not available (Command Line Tools only). You can still commit this scaffold so the project can be completed on a machine with Xcode.
-
-## How to use (on a Mac with Xcode)
-1. Install Xcode (from App Store).
-2. Create a new Xcode project:
-   - macOS App (SwiftUI)
-   - name: `MeetingBuddyShell`
-3. Copy the Swift files from `Sources/MeetingBuddyShell/` into the Xcode target.
-4. Ensure the app has network access (default is fine for localhost).
-5. Run the Python backend separately:
-
+## Run backend + shell
+1) Start backend:
 ```bash
 cd <repo>
 source .venv/bin/activate
 python -m backend.main
 ```
 
-6. Launch the SwiftUI app. It should connect and render snapshot/update.
+2) Run the shell:
+- In Xcode: Run `MeetingBuddyShell`
+- Or via CLI:
+```bash
+cd native/MeetingBuddyShell
+swift run MeetingBuddyShell
+```
+
+## What it demonstrates
+- NSPanel HUD: `.nonactivatingPanel`, floating, movable by background
+- WebSocket: connects to `ws://localhost:8765`
+- Minimal rendering of transcript + active question + answer one-liner
+- Reconnect attempts + visible connected/disconnected state
 
 ## Notes
 - WebSocket protocol is documented in `PROTOCOL.md`.
-- Snapshot/update now includes `protocol_version`.
+- `snapshot`/`update` include `protocol_version`.

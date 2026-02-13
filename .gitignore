@@ -48,3 +48,4 @@ audio-capture/.build/
 .venv_lint/
 .venv_test/
 
+native/MeetingBuddyShell/.build/
