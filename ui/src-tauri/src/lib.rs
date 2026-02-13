@@ -34,19 +34,20 @@ pub fn run() {
 
             // --- Spawn the Python backend sidecar ---
             let app_handle = app.handle().clone();
-            match app.shell().sidecar("meeting-buddy-backend") {
-                Ok(command) => {
-                    // Try to spawn with retry logic
-                    let mut retries = 3;
-                    let mut spawned = false;
-                    
-                    while retries > 0 && !spawned {
+            let shell = app.shell();
+            
+            // Try to spawn with retry logic
+            let mut retries = 3;
+            let mut spawned = false;
+            
+            while retries > 0 && !spawned {
+                match shell.sidecar("meeting-buddy-backend") {
+                    Ok(command) => {
                         match command.spawn() {
                             Ok((mut rx, child)) => {
                                 log::info!("Backend sidecar spawned successfully");
                                 app.manage(BackendChild(Mutex::new(Some(child))));
                                 spawned = true;
-
                                 // Drain stdout/stderr in a background task
                                 let app_handle_clone = app_handle.clone();
                                 tauri::async_runtime::spawn(async move {
@@ -101,12 +102,18 @@ pub fn run() {
                             }
                         }
                     }
-                }
-                Err(e) => {
-                    log::error!("[meeting-buddy] Backend sidecar binary not found: {e}");
-                    log::error!("[meeting-buddy] This usually means the app bundle is incomplete.");
-                    log::error!("[meeting-buddy] Rebuild with: cd ui && npm run tauri build");
-                    app.manage(BackendChild(Mutex::new(None)));
+                    Err(e) => {
+                        retries -= 1;
+                        if retries > 0 {
+                            log::warn!("[meeting-buddy] Backend sidecar binary not found (retries left: {}): {e}", retries);
+                            std::thread::sleep(std::time::Duration::from_millis(500));
+                        } else {
+                            log::error!("[meeting-buddy] Backend sidecar binary not found after retries: {e}");
+                            log::error!("[meeting-buddy] This usually means the app bundle is incomplete.");
+                            log::error!("[meeting-buddy] Rebuild with: cd ui && npm run tauri build");
+                            app.manage(BackendChild(Mutex::new(None)));
+                        }
+                    }
                 }
             }
 
