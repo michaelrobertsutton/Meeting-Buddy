@@ -184,20 +184,23 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Quick-type question override
-    dom.quickQuestion.addEventListener('keydown', (e) => {
+    dom.quickQuestion.addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
-            setManualQuestionFromInput();
+            // Execute immediately on Enter (no debounce)
+            await setManualQuestionFromInput(true);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            if (_quickQuestionTimer) clearTimeout(_quickQuestionTimer);
             dom.quickQuestion.value = '';
-            setManualQuestionFromInput();
+            await setManualQuestionFromInput(true);
             dom.quickQuestion.blur();
         }
     });
     dom.quickQuestion.addEventListener('blur', () => {
         // Commit whatever is in the box on blur (useful after paste)
-        setManualQuestionFromInput();
+        // Use debounce for blur to avoid firing on accidental clicks
+        setManualQuestionFromInput(false);
     });
 
     // Enter key for inputs
@@ -1103,20 +1106,62 @@ async function selectQuestion(text) {
 }
 
 let _quickQuestionTimer = null;
-async function setManualQuestionFromInput() {
-    if (!dom.quickQuestion) return;
+async function setManualQuestionFromInput(immediate = false) {
+    if (!dom.quickQuestion) {
+        console.warn('[Question] quickQuestion DOM element not found');
+        return;
+    }
     const text = dom.quickQuestion.value.trim();
 
-    // Debounce rapid typing/blur
-    if (_quickQuestionTimer) clearTimeout(_quickQuestionTimer);
-    _quickQuestionTimer = setTimeout(async () => {
+    // Don't send empty questions (unless explicitly clearing)
+    if (!text) {
+        // If empty, clear manual override
         try {
-            await sendCommand('set_question', { text });
-            // UI state will also be updated from server snapshot/update
+            await sendCommand('set_question', { text: '' });
+            state.manualQuestion = false;
+            document.body.classList.remove('manual-question');
+            dom.btnAutoQuestion.classList.add('active');
         } catch (err) {
             console.error('[Question] set_question failed:', err);
         }
-    }, 150);
+        return;
+    }
+
+    // Clear any pending debounce
+    if (_quickQuestionTimer) {
+        clearTimeout(_quickQuestionTimer);
+        _quickQuestionTimer = null;
+    }
+    
+    // Immediate UI feedback - show the question right away
+    renderQuestion(text);
+    state.manualQuestion = true;
+    document.body.classList.add('manual-question');
+    dom.btnAutoQuestion.classList.remove('active');
+    
+    // If immediate (Enter key), send right away; otherwise debounce (blur)
+    const sendCommandNow = async () => {
+        try {
+            console.log('[Question] Sending set_question command:', text);
+            const result = await sendCommand('set_question', { text });
+            console.log('[Question] set_question succeeded:', result);
+            // Server will send update message with synthesis results
+        } catch (err) {
+            console.error('[Question] set_question failed:', err);
+            // Revert UI state on error
+            state.manualQuestion = false;
+            document.body.classList.remove('manual-question');
+            dom.btnAutoQuestion.classList.add('active');
+            renderQuestion(null);
+        }
+    };
+    
+    if (immediate) {
+        await sendCommandNow();
+    } else {
+        // Debounce for blur events to avoid rapid-fire requests
+        _quickQuestionTimer = setTimeout(sendCommandNow, 150);
+    }
 }
 
 async function resumeAutoQuestion() {
