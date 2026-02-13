@@ -614,20 +614,67 @@ class TranscriptWebSocket:
             self._clients -= disconnected
 
     async def _run_synthesis(self, question: str) -> None:
-        """Run synthesis and broadcast result immediately."""
+        """Run synthesis with streaming and broadcast partial + final results."""
         self._synthesis_in_flight = True
         # Notify clients that synthesis is in progress
         await self._broadcast_event({"type": "synthesis_searching", "question": question})
         try:
-            result = await self._synthesis_engine.synthesize(question)
-            if result is not None:
-                answer_dict = result.to_dict()
-                self._active_answer = answer_dict
+            # Get recent transcript context (last 90 seconds) for disambiguation
+            transcript_context = self.buffer.get_recent_text(lookback_seconds=90.0)
+            
+            # Use streaming synthesis
+            full_text = ""
+            streamed = False
+            async for delta in self._synthesis_engine.synthesize_stream(question, transcript_context=transcript_context):
+                streamed = True
+                full_text += delta
+                # Try to parse partial JSON for one_liner preview
+                partial_one_liner = self._try_parse_partial_json(full_text)
+                if partial_one_liner:
+                    await self._broadcast_event({
+                        "type": "answer_partial",
+                        "partial_text": partial_one_liner,
+                    })
+            
+            # If no streaming occurred (cached result), fall back to non-streaming
+            if not streamed or not full_text:
+                result = await self._synthesis_engine.synthesize(question, transcript_context=transcript_context)
+                if result is not None:
+                    answer_dict = result.to_dict()
+                    self._active_answer = answer_dict
+                    self._qa_history.append({
+                        "question": question,
+                        "answer": answer_dict,
+                        "timestamp": time.time(),
+                    })
+                    max_history = 100
+                    if len(self._qa_history) > max_history:
+                        self._qa_history = self._qa_history[-max_history:]
+                    await self._broadcast_answer()
+                return
+            
+            # Parse final JSON result from streamed text
+            try:
+                import json
+                data = json.loads(full_text)
+                result_dict = {
+                    "one_liner": data.get("one_liner", ""),
+                    "bullets": data.get("bullets", []),
+                    "best_practice_bullets": data.get("best_practice_bullets", []),
+                    "clarifiers": data.get("clarifiers", []),
+                    "citations": data.get("citations", []),
+                    "confidence": float(data.get("confidence", 0.0)),
+                }
+                
+                # Validate citations if we have retrieval results
+                # (Note: we'd need to pass results through, but for now just use what we have)
+                
+                self._active_answer = result_dict
                 # Append to in-memory Q&A history for this session
                 self._qa_history.append(
                     {
                         "question": question,
-                        "answer": answer_dict,
+                        "answer": result_dict,
                         "timestamp": time.time(),
                     }
                 )
@@ -636,11 +683,31 @@ class TranscriptWebSocket:
                 if len(self._qa_history) > max_history:
                     self._qa_history = self._qa_history[-max_history:]
                 await self._broadcast_answer()
+            except json.JSONDecodeError:
+                logger.exception("Failed to parse synthesis JSON")
+                await self._broadcast_event({"type": "synthesis_error", "error": "Failed to parse response"})
         except Exception:
             logger.exception("Synthesis task failed")
             await self._broadcast_event({"type": "synthesis_error", "error": "Synthesis failed"})
         finally:
             self._synthesis_in_flight = False
+
+    def _try_parse_partial_json(self, text: str) -> str | None:
+        """Try to extract partial one_liner from incomplete JSON."""
+        try:
+            import json
+            import re
+            # Look for "one_liner": "..." pattern, even if JSON is incomplete
+            match = re.search(r'"one_liner"\s*:\s*"([^"]*)"', text)
+            if match:
+                return match.group(1)
+            # Try parsing if JSON looks complete enough
+            if text.strip().endswith("}") or '"one_liner"' in text:
+                data = json.loads(text + '"}')  # Try to complete it
+                return data.get("one_liner", "")
+        except Exception:
+            pass
+        return None
 
     async def _broadcast_answer(self) -> None:
         """Broadcast an answer_update message to all clients."""

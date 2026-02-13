@@ -86,15 +86,23 @@ def build_user_prompt(
     question: str,
     results: list[RetrievalResult],
     doc_registry: dict | None = None,
+    transcript_context: str | None = None,
 ) -> str:
     """Assemble the full user prompt with question and context."""
     chunks_text = format_chunks(results)
     titles = {r.doc_title for r in results}
     registry_text = format_doc_registry(doc_registry or {}, titles)
 
-    return (
-        f"ACTIVE QUESTION: {question}\n\n"
+    parts = [f"ACTIVE QUESTION: {question}\n"]
+
+    # Add recent conversation context if provided
+    if transcript_context and transcript_context.strip():
+        parts.append(f"RECENT CONVERSATION:\n{transcript_context.strip()}\n")
+
+    parts.extend([
         f"{registry_text}"
         f"SOURCE DOCUMENTS:\n{chunks_text}\n\n"
         "Provide your answer as JSON."
-    )
+    ])
+
+    return "".join(parts)
