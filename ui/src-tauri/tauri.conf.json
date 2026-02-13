@@ -42,7 +42,8 @@
     ],
     "externalBin": [
       "AudioCapture",
-      "meeting-buddy-backend"
+      "meeting-buddy-backend",
+      "MeetingBuddySettings"
     ]
   }
 }

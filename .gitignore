@@ -40,6 +40,7 @@ ui/src-tauri/target/
 
 # Swift build artifacts
 audio-capture/.build/
+native/MeetingBuddySettings/.build/
 
 # User data (local)
 # ~/.meeting-buddy/ is outside repo, but just in case

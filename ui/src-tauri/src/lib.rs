@@ -1,6 +1,9 @@
 use std::sync::Mutex;
-use tauri::{Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
+
+/// Holds the settings sidecar child process so we can kill it before re-launching.
+struct SettingsChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
 #[cfg(target_os = "macos")]
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
@@ -16,6 +19,17 @@ fn get_backend_url() -> String {
 #[tauri::command]
 fn dismiss_onboarding() -> Result<(), String> {
     // This command can be called from anywhere to dismiss the onboarding overlay
+    Ok(())
+}
+
+/// Open a URL (e.g. System Settings deep link) via macOS `open` command.
+/// Used for onboarding "Open System Settings" so it works reliably from native.
+#[tauri::command]
+fn open_system_settings_url(url: String) -> Result<(), String> {
+    std::process::Command::new("open")
+        .arg(&url)
+        .status()
+        .map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -38,6 +52,22 @@ fn check_screen_recording_permission() -> bool {
 #[tauri::command]
 fn check_screen_recording_permission() -> bool {
     // Not macOS, assume permission granted (or not applicable)
+    true
+}
+
+/// Microphone permission check (optional for onboarding).
+/// On macOS we could use AVFoundation; for now return true so we don't block.
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn check_microphone_permission() -> bool {
+    // TODO: Use AVFoundation AVCaptureDevice::authorizationStatus(for: .audio)
+    // For now assume granted so onboarding doesn't block; mic is optional.
+    true
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn check_microphone_permission() -> bool {
     true
 }
 
@@ -146,6 +176,9 @@ pub fn run() {
                 }
             }
 
+            // Register SettingsChild state (holds the settings sidecar handle)
+            app.manage(SettingsChild(Mutex::new(None)));
+
             #[cfg(desktop)]
             {
                 use tauri_plugin_global_shortcut::{
@@ -189,22 +222,25 @@ pub fn run() {
                                     let _ = window.emit("toggle-pin", ());
                                 }
                             } else if shortcut == &settings_shortcut {
-                                // Open separate Settings window (NavigationSplitView-ish)
-                                if app_handle.get_webview_window("settings").is_none() {
-                                    let _ = WebviewWindowBuilder::new(
-                                        &app_handle,
-                                        "settings",
-                                        WebviewUrl::App("settings.html".into()),
-                                    )
-                                    .title("Meeting Buddy Settings")
-                                    .inner_size(860.0, 600.0)
-                                    .resizable(true)
-                                    .decorations(true)
-                                    .build();
+                                // Launch native SwiftUI settings app as a sidecar
+                                // Kill any existing instance first so only one runs at a time
+                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                                    if let Some(old_child) = state.0.lock().unwrap().take() {
+                                        let _ = old_child.kill();
+                                    }
                                 }
-                                if let Some(w) = app_handle.get_webview_window("settings") {
-                                    let _ = w.show();
-                                    let _ = w.set_focus();
+                                match app_handle.shell().sidecar("MeetingBuddySettings") {
+                                    Ok(cmd) => {
+                                        match cmd.spawn() {
+                                            Ok((_rx, child)) => {
+                                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                                                    *state.0.lock().unwrap() = Some(child);
+                                                }
+                                            }
+                                            Err(e) => log::error!("[settings] Failed to spawn: {e}"),
+                                        }
+                                    }
+                                    Err(e) => log::error!("[settings] Sidecar not found: {e}"),
                                 }
                             } else if shortcut == &clear_shortcut {
                                 if let Some(window) = app_handle.get_webview_window("overlay") {
@@ -230,11 +266,76 @@ pub fn run() {
                 app.global_shortcut().register(dismiss_onboarding_shortcut)?;
             }
 
+            // --- Menu bar tray icon (Issue #101) ---
+            #[cfg(desktop)]
+            {
+                use tauri::menu::{Menu, MenuItem};
+                use tauri::tray::TrayIconBuilder;
+
+                let toggle_item = MenuItem::with_id(app, "toggle_hud", "Toggle HUD", true, Some("Alt+Space"))?;
+                let settings_item = MenuItem::with_id(app, "open_settings", "Open Settings", true, Some("Cmd+,"))?;
+                let export_item = MenuItem::with_id(app, "export", "Export", true, None::<&str>)?;
+                let quit_item = MenuItem::with_id(app, "quit", "Quit Meeting Buddy", true, None::<&str>)?;
+
+                let menu = Menu::with_items(app, &[&toggle_item, &settings_item, &export_item, &quit_item])?;
+
+                let app_handle = app.handle().clone();
+                let _tray = TrayIconBuilder::new()
+                    .icon(app.default_window_icon().unwrap().clone())
+                    .menu(&menu)
+                    .menu_on_left_click(true)
+                    .tooltip("Meeting Buddy")
+                    .on_menu_event(move |app_handle, event| {
+                        match event.id.as_ref() {
+                            "toggle_hud" => {
+                                if let Some(window) = app_handle.get_webview_window("overlay") {
+                                    if window.is_visible().unwrap_or(false) {
+                                        let _ = window.hide();
+                                    } else {
+                                        let _ = window.show();
+                                    }
+                                }
+                            }
+                            "open_settings" => {
+                                // Kill any existing settings sidecar, then spawn a fresh one
+                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                                    if let Some(old_child) = state.0.lock().unwrap().take() {
+                                        let _ = old_child.kill();
+                                    }
+                                }
+                                match app_handle.shell().sidecar("MeetingBuddySettings") {
+                                    Ok(cmd) => {
+                                        match cmd.spawn() {
+                                            Ok((_rx, child)) => {
+                                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                                                    *state.0.lock().unwrap() = Some(child);
+                                                }
+                                            }
+                                            Err(e) => log::error!("[settings] Failed to spawn: {e}"),
+                                        }
+                                    }
+                                    Err(e) => log::error!("[settings] Sidecar not found: {e}"),
+                                }
+                            }
+                            "export" => {
+                                if let Some(overlay) = app_handle.get_webview_window("overlay") {
+                                    let _ = overlay.eval("if(typeof exportSession === 'function') exportSession();");
+                                }
+                            }
+                            "quit" => {
+                                app_handle.exit(0);
+                            }
+                            _ => {}
+                        }
+                    })
+                    .build(app)?;
+            }
+
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![get_backend_url, check_screen_recording_permission, dismiss_onboarding])
+        .invoke_handler(tauri::generate_handler![get_backend_url, check_screen_recording_permission, check_microphone_permission, dismiss_onboarding, open_system_settings_url])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
@@ -244,6 +345,12 @@ pub fn run() {
             if let Some(state) = app_handle.try_state::<BackendChild>() {
                 if let Some(child) = state.0.lock().unwrap().take() {
                     log::info!("Killing backend sidecar");
+                    let _ = child.kill();
+                }
+            }
+            // Kill settings sidecar on app exit
+            if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                if let Some(child) = state.0.lock().unwrap().take() {
                     let _ = child.kill();
                 }
             }
