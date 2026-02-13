@@ -46,3 +46,16 @@ jobs:
           cd ui
           npm ci
           npm run build-frontend
+
+  swift_build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Build MeetingBuddySettings
+        run: |
+          cd native/MeetingBuddySettings
+          swift build -c release
+      - name: Build MeetingBuddyShell
+        run: |
+          cd native/MeetingBuddyShell
+          swift build -c release
