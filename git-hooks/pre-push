@@ -1,0 +1,32 @@
+#!/bin/sh
+#
+# Pre-push hook: Prevent direct pushes to main branch
+# This enforces that all changes to main must go through pull requests
+#
+# To install: cp git-hooks/pre-push .git/hooks/pre-push && chmod +x .git/hooks/pre-push
+#
+
+# Get the branch being pushed to
+protected_branch='main'
+
+while read local_ref local_sha remote_ref remote_sha
+do
+    # Skip if this is a delete operation
+    if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+        continue
+    fi
+
+    # Check if pushing to protected branch
+    if [ "$remote_ref" = "refs/heads/$protected_branch" ]; then
+        echo "❌ Error: Direct pushes to '$protected_branch' branch are not allowed."
+        echo ""
+        echo "Please create a pull request instead:"
+        echo "  1. Push to a feature branch: git push origin your-feature-branch"
+        echo "  2. Create a PR: gh pr create --base main --head your-feature-branch"
+        echo ""
+        echo "This protects the main branch and ensures code review."
+        exit 1
+    fi
+done
+
+exit 0

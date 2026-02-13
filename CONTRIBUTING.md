@@ -33,6 +33,32 @@ Agent/area labels (optional but recommended):
 - **No force-push** to shared branches.
 - Prefer small, reviewable commits. Prefix commit messages with the issue key when practical (e.g., `G.3:`).
 
+## Branch Protection
+
+The `main` branch is protected to ensure code quality and prevent accidental changes:
+
+- **No direct pushes to `main`**: All changes must go through pull requests
+- **Pre-push hook**: A git hook automatically blocks direct pushes to `main` locally
+- **Required workflow**: 
+  1. Create a feature branch: `git checkout -b feature/my-feature`
+  2. Make your changes and commit
+  3. Push to your branch: `git push origin feature/my-feature`
+  4. Create a PR: `gh pr create --base main --head feature/my-feature`
+  5. Get review and merge via GitHub
+
+**Setting up the pre-push hook** (first-time setup):
+```bash
+cp git-hooks/pre-push .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
+
+**Note**: Full GitHub branch protection (status checks, required reviews) requires GitHub Pro for private repos. The pre-push hook provides basic protection for all contributors.
+
+To bypass the hook in emergencies (not recommended):
+```bash
+git push origin main --no-verify
+```
+
 ## Hot file coordination
 
 Some files are likely to be edited by multiple issues (e.g., WebSocket protocol, UI state). When you touch these:
