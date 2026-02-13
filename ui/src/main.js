@@ -1347,25 +1347,14 @@ function renderTranscript() {
     const quiet = sentences.length === 0 || (now - last) > 3000;
     if (dom.transcriptQuiet) dom.transcriptQuiet.classList.toggle('hidden', !quiet);
 
-    // Render as stacked lines with recency-based opacity
+    // Render as stacked lines; most recent sentence 100% white, older fade via gradient mask
     dom.transcriptContent.innerHTML = '';
     const total = sentences.length;
     for (let i = 0; i < total; i++) {
         const line = document.createElement('div');
         line.className = 'transcript-line';
+        if (i === total - 1) line.classList.add('transcript-line-focus');
         line.textContent = sentences[i];
-
-        // Last 2–3 sentences at full opacity, older fade toward ~0.4.
-        const age = total - 1 - i;
-        let opacity = 1.0;
-        if (age >= 3) {
-            // Map older lines to [0.4..0.9] range
-            const t = Math.min(1, (age - 3) / 14);
-            opacity = 0.9 - 0.5 * t;
-            opacity = Math.max(0.4, opacity);
-        }
-        line.style.opacity = String(opacity);
-
         dom.transcriptContent.appendChild(line);
     }
 
