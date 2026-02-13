@@ -88,7 +88,7 @@ struct ContentView: View {
         // glass edge
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.10), lineWidth: 0.5)
+                .strokeBorder(Color(.sRGB, white: 1.0, opacity: 0.10), lineWidth: 0.5)
         )
         .padding(8)
     }
