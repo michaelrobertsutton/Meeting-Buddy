@@ -16,6 +16,9 @@ const state = {
     qaHistory: [],
     prepQuestions: [],
     prepResults: {},
+
+    pinnedAnswers: [],
+
     streamingAnswer: null,  // Partial text being streamed
 };
 
@@ -55,6 +58,9 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.questionText = document.getElementById('question-text');
     dom.answerText = document.getElementById('answer-text');
     dom.bulletList = document.getElementById('bullet-list');
+    dom.btnBookmark = document.getElementById('btn-bookmark');
+    dom.pinnedSection = document.getElementById('pinned');
+    dom.pinnedList = document.getElementById('pinned-list');
     dom.bestPracticeSection = document.getElementById('best-practice');
     dom.bestPracticeList = document.getElementById('best-practice-list');
     dom.clarifierSection = document.getElementById('clarifiers');
@@ -126,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Event listeners
     dom.btnExport.addEventListener('click', exportSession);
     dom.btnPin.addEventListener('click', togglePin);
+    dom.btnBookmark.addEventListener('click', bookmarkActiveAnswer);
     dom.btnClose.addEventListener('click', () => {
         const { getCurrentWindow } = window.__TAURI__.window;
         getCurrentWindow().hide();
@@ -703,6 +710,15 @@ function connectWebSocket() {
         } catch (err) {
             console.error('[WS] Failed to load projects on connect:', err);
         }
+
+        // Best-effort: load pinned answers
+        try {
+            const data = await sendCommand('get_pinned');
+            state.pinnedAnswers = data.pinned || [];
+            renderPinnedAnswers();
+        } catch (err) {
+            console.debug('[Pinned] get_pinned not available:', err.message);
+        }
     };
 
     ws.onmessage = (event) => {
@@ -856,6 +872,12 @@ function handleMessage(msg) {
         dom.quickQuestion.value = '';
     }
 
+    // Pinned answers
+    if (msg.pinned) {
+        state.pinnedAnswers = msg.pinned;
+        renderPinnedAnswers();
+    }
+
     // Update synthesis searching state
     if (msg.synthesis_searching !== undefined) {
         state.synthesisSearching = msg.synthesis_searching;
@@ -877,6 +899,8 @@ function handleMessage(msg) {
         if (!state.pinned) {
             renderAnswer(msg.active_answer);
         }
+        // Refresh bookmark button state
+        renderPinnedAnswers();
     }
 
     if (!state.pinned) {
@@ -1053,6 +1077,97 @@ async function resumeAutoQuestion() {
         if (dom.quickQuestion) dom.quickQuestion.value = '';
     } catch (err) {
         console.error('[Question] Resume auto failed:', err);
+    }
+}
+
+function isActiveAnswerPinned() {
+    const q = state.activeQuestion;
+    if (!q) return false;
+    return (state.pinnedAnswers || []).some((p) => p.question === q);
+}
+
+async function bookmarkActiveAnswer() {
+    const question = state.activeQuestion;
+    const answer = state.activeAnswer;
+    if (!question || !answer) return;
+
+    try {
+        const data = await sendCommand('pin_answer', { question, answer });
+        state.pinnedAnswers = data.pinned || [];
+        renderPinnedAnswers();
+    } catch (err) {
+        console.error('[Pinned] pin_answer failed:', err);
+    }
+}
+
+async function unbookmarkAnswer(id) {
+    try {
+        const data = await sendCommand('unpin_answer', { id });
+        state.pinnedAnswers = data.pinned || [];
+        renderPinnedAnswers();
+    } catch (err) {
+        console.error('[Pinned] unpin_answer failed:', err);
+    }
+}
+
+function renderPinnedAnswers() {
+    if (!dom.pinnedSection || !dom.pinnedList) return;
+
+    const items = state.pinnedAnswers || [];
+    dom.pinnedSection.classList.toggle('hidden', items.length === 0);
+    dom.pinnedList.innerHTML = '';
+
+    for (const p of items) {
+        const li = document.createElement('li');
+        li.className = 'pinned-item';
+
+        const q = document.createElement('div');
+        q.className = 'pinned-q';
+        q.textContent = p.question || '';
+
+        const a = document.createElement('div');
+        a.className = 'pinned-a';
+        a.textContent = (p.answer && p.answer.one_liner) ? p.answer.one_liner : '';
+
+        const row = document.createElement('div');
+        row.className = 'pinned-actions';
+
+        const btnRecall = document.createElement('button');
+        btnRecall.className = 'btn-secondary';
+        btnRecall.textContent = 'Recall';
+        btnRecall.addEventListener('click', async () => {
+            // Set manual question and render answer immediately from cached pinned data
+            if (dom.quickQuestion) dom.quickQuestion.value = p.question || '';
+            try {
+                await sendCommand('set_question', { text: p.question || '' });
+            } catch (err) {
+                console.error('[Pinned] recall set_question failed:', err);
+            }
+            if (p.answer) {
+                state.activeAnswer = p.answer;
+                renderAnswer(p.answer);
+            }
+        });
+
+        const btnUnpin = document.createElement('button');
+        btnUnpin.className = 'btn-danger';
+        btnUnpin.textContent = 'Unpin';
+        btnUnpin.addEventListener('click', () => unbookmarkAnswer(p.id));
+
+        row.appendChild(btnRecall);
+        row.appendChild(btnUnpin);
+
+        li.appendChild(q);
+        if (a.textContent) li.appendChild(a);
+        li.appendChild(row);
+
+        dom.pinnedList.appendChild(li);
+    }
+
+    // Update bookmark button state
+    if (dom.btnBookmark) {
+        dom.btnBookmark.classList.toggle('active', isActiveAnswerPinned());
+        dom.btnBookmark.textContent = isActiveAnswerPinned() ? 'Bookmarked' : 'Bookmark';
     }
 }
 

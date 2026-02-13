@@ -52,6 +52,10 @@ class TranscriptWebSocket:
         self._prep_questions: list[str] = []
         self._prep_results: dict[str, dict] = {}  # question -> answer dict
 
+        # Pinned/bookmarked answers (session state)
+        self._pinned_answers: list[dict] = []  # [{id, question, answer, timestamp}]
+        self._pin_seq: int = 0
+
     async def start(self) -> None:
         """Start the WebSocket server."""
         self._server = await serve(
@@ -120,6 +124,9 @@ class TranscriptWebSocket:
             "generate_prep_questions": self._cmd_generate_prep_questions,
             "get_prep_results": self._cmd_get_prep_results,
             "add_prep_question": self._cmd_add_prep_question,
+            "pin_answer": self._cmd_pin_answer,
+            "unpin_answer": self._cmd_unpin_answer,
+            "get_pinned": self._cmd_get_pinned,
             "export_session": self._cmd_export_session,
         }
 
@@ -423,6 +430,56 @@ class TranscriptWebSocket:
             result = await self._synthesis_engine.synthesize_once(q)
             self._prep_results[q] = result.to_dict()
         return {"questions": self._prep_questions, "results": self._prep_results}
+
+    # --- Pinned answers ---
+
+    async def _cmd_get_pinned(self, params: dict) -> dict:
+        return {"pinned": list(self._pinned_answers)}
+
+    async def _cmd_pin_answer(self, params: dict) -> dict:
+        """Pin the current answer (or a provided answer payload) for quick recall."""
+        question = (params.get("question") or "").strip()
+        answer = params.get("answer")
+
+        if not question and self._last_question:
+            question = self._last_question
+        if answer is None:
+            answer = self._active_answer
+
+        if not question or not answer:
+            raise ValueError("No answer available to pin")
+
+        # Dedup by question text
+        for item in self._pinned_answers:
+            if item.get("question") == question:
+                return {"pinned": list(self._pinned_answers)}
+
+        self._pin_seq += 1
+        item = {
+            "id": str(self._pin_seq),
+            "question": question,
+            "answer": answer,
+            "timestamp": time.time(),
+        }
+        self._pinned_answers.insert(0, item)
+        await self._broadcast_event({"type": "pinned_update", "pinned": list(self._pinned_answers)})
+        return {"pinned": list(self._pinned_answers)}
+
+    async def _cmd_unpin_answer(self, params: dict) -> dict:
+        pid = (params.get("id") or "").strip()
+        question = (params.get("question") or "").strip()
+
+        before = len(self._pinned_answers)
+        if pid:
+            self._pinned_answers = [p for p in self._pinned_answers if str(p.get("id")) != pid]
+        elif question:
+            self._pinned_answers = [p for p in self._pinned_answers if p.get("question") != question]
+        else:
+            raise ValueError("id or question is required")
+
+        if len(self._pinned_answers) != before:
+            await self._broadcast_event({"type": "pinned_update", "pinned": list(self._pinned_answers)})
+        return {"pinned": list(self._pinned_answers)}
 
     async def _cmd_export_session(self, params: dict) -> dict:
         """Export session data as markdown or JSON."""
@@ -743,4 +800,5 @@ class TranscriptWebSocket:
             msg["active_answer"] = self._active_answer
         # Always include Q&A history so new clients get full session context
         msg["qa_history"] = list(self._qa_history)
+        msg["pinned"] = list(self._pinned_answers)
         return msg
