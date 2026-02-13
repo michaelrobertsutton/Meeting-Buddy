@@ -28,6 +28,14 @@ struct ContentView: View {
                     .padding(.horizontal, 16)
             }
 
+            if let err = ws.settingsError, !err.isEmpty {
+                Text("Settings: \(err)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .padding(.horizontal, 16)
+            }
+
             GroupBox("Active Question") {
                 Text(ws.activeQuestion.isEmpty ? "Listening…" : ws.activeQuestion)
                     .font(.headline)
