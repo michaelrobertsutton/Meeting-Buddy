@@ -106,12 +106,24 @@
         </section>
 
         <section id="answer" class="section">
-            <h3>Answer</h3>
+            <div class="section-header">
+                <h3>Answer</h3>
+                <div class="answer-controls">
+                    <button id="btn-bookmark" class="qh-btn" title="Bookmark this answer">Bookmark</button>
+                </div>
+            </div>
             <div id="answer-searching" class="hidden">
                 <span class="search-spinner"></span>
                 <span class="search-text">Searching sources...</span>
             </div>
             <p id="answer-text" class="placeholder">Waiting for question...</p>
+        </section>
+
+        <section id="pinned" class="section hidden">
+            <div class="section-header">
+                <h3>Pinned Answers</h3>
+            </div>
+            <ul id="pinned-list"></ul>
         </section>
 
         <section id="qa-history" class="section">

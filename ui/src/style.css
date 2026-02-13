@@ -179,6 +179,11 @@ body.manual-question #quick-question {
     gap: 4px;
 }
 
+.answer-controls {
+    display: flex;
+    gap: 4px;
+}
+
 .qh-btn {
     background: none;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -756,6 +761,48 @@ body.pinned #drag-handle {
     align-self: flex-start;
     font-size: 11px;
     padding: 4px 8px;
+}
+
+/* Pinned answers */
+#pinned-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 6px;
+}
+
+#pinned-list li {
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+#pinned-list .pinned-q {
+    color: #e6e6e6;
+    font-size: 12px;
+    margin-bottom: 4px;
+}
+
+#pinned-list .pinned-a {
+    color: #aaa;
+    font-size: 11px;
+    margin-bottom: 6px;
+}
+
+#pinned-list .pinned-actions {
+    display: flex;
+    gap: 6px;
+}
+
+#pinned-list .btn-secondary {
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.05);
+    color: #ccc;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 11px;
+}
+
+#pinned-list .btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
 }
 
 /* --- OAuth Login --- */
