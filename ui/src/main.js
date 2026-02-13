@@ -515,6 +515,19 @@ async function refreshDocList() {
                 titleSpan.className = 'doc-title';
                 titleSpan.textContent = title;
 
+                const sizeSpan = document.createElement('span');
+                sizeSpan.className = 'doc-size';
+                if (typeof d !== 'string' && d.size_bytes) {
+                    const kb = Math.round(d.size_bytes / 1024);
+                    sizeSpan.textContent = kb + ' KB';
+                } else {
+                    sizeSpan.textContent = '—';
+                }
+
+                const statusDot = document.createElement('span');
+                statusDot.className = 'doc-status-dot ' + ((typeof d !== 'string' && d.indexed) ? 'indexed' : 'missing');
+                statusDot.title = (typeof d !== 'string' && d.indexed) ? 'Indexed' : 'Not indexed';
+
                 const descInput = document.createElement('input');
                 descInput.className = 'doc-desc';
                 descInput.type = 'text';
@@ -556,7 +569,9 @@ async function refreshDocList() {
                 btn.className = 'btn-danger';
                 btn.addEventListener('click', () => deleteDoc(title));
 
+                li.appendChild(statusDot);
                 li.appendChild(titleSpan);
+                li.appendChild(sizeSpan);
                 li.appendChild(descInput);
                 li.appendChild(prSelect);
                 li.appendChild(btn);

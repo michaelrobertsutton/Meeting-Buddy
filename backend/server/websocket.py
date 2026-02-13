@@ -266,8 +266,24 @@ class TranscriptWebSocket:
             from ingest.store import ProjectStore
             project_path = self._project_manager.get_project_path(active)
             store = ProjectStore(project_path)
-            titles = store.list_documents()
-            return {"docs": titles}
+
+            docs = store.list_document_details()
+
+            # Merge in per-doc registry fields (description/priority)
+            registry = {}
+            try:
+                registry = self._project_manager.get_doc_registry(active)
+            except Exception:
+                registry = {}
+
+            for d in docs:
+                meta = registry.get(d.get("title")) if isinstance(registry, dict) else None
+                if not isinstance(meta, dict):
+                    meta = {}
+                d["description"] = meta.get("description", "")
+                d["priority"] = meta.get("priority", "normal")
+
+            return {"docs": docs}
         except Exception:
             logger.exception("Failed to list docs")
             return {"docs": []}
