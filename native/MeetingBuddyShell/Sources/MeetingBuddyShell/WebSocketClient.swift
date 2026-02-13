@@ -12,27 +12,57 @@ final class WebSocketClient: ObservableObject {
     private var task: URLSessionWebSocketTask?
     private let url: URL
 
+    private var reconnectAttempt: Int = 0
+    private var reconnectWorkItem: DispatchWorkItem?
+
     init(url: URL = URL(string: "ws://localhost:8765")!) {
         self.url = url
     }
 
     func connect() {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+
         disconnect()
 
         let session = URLSession(configuration: .default)
         let task = session.webSocketTask(with: url)
         self.task = task
         task.resume()
-        connected = true
-        lastError = nil
+
+        // We don't get an explicit "open" callback; treat first successful receive as connected.
+        DispatchQueue.main.async {
+            self.connected = false
+            self.lastError = nil
+        }
 
         receiveLoop()
     }
 
     func disconnect() {
+        reconnectWorkItem?.cancel()
+        reconnectWorkItem = nil
+
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
-        connected = false
+
+        DispatchQueue.main.async {
+            self.connected = false
+        }
+    }
+
+    private func scheduleReconnect() {
+        reconnectWorkItem?.cancel()
+
+        // backoff: 0.5s, 1s, 2s, 4s… capped
+        reconnectAttempt = min(reconnectAttempt + 1, 6)
+        let delay = min(pow(2.0, Double(reconnectAttempt)) * 0.25, 8.0)
+
+        let item = DispatchWorkItem { [weak self] in
+            self?.connect()
+        }
+        reconnectWorkItem = item
+        DispatchQueue.global().asyncAfter(deadline: .now() + delay, execute: item)
     }
 
     private func receiveLoop() {
@@ -46,7 +76,17 @@ final class WebSocketClient: ObservableObject {
                     self.connected = false
                     self.lastError = err.localizedDescription
                 }
+                self.scheduleReconnect()
+
             case .success(let message):
+                // Mark connected on first successfully received frame.
+                DispatchQueue.main.async {
+                    if self.connected == false {
+                        self.connected = true
+                        self.reconnectAttempt = 0
+                    }
+                }
+
                 switch message {
                 case .string(let s):
                     self.handle(text: s)
