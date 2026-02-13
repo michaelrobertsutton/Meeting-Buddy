@@ -5,6 +5,7 @@ import json
 import logging
 import time
 from pathlib import Path
+from subprocess import CalledProcessError, check_output
 
 import websockets
 from websockets.asyncio.server import ServerConnection, serve
@@ -14,6 +15,14 @@ from backend.question.extractor import ActiveQuestionExtractor
 from backend.transcript.buffer import TranscriptBuffer
 
 logger = logging.getLogger(__name__)
+
+
+def _git_short_sha() -> str:
+    try:
+        sha = check_output(["git", "rev-parse", "--short", "HEAD"], text=True).strip()
+        return sha or "unknown"
+    except (FileNotFoundError, CalledProcessError):
+        return "unknown"
 
 
 class TranscriptWebSocket:
@@ -103,7 +112,12 @@ class TranscriptWebSocket:
         """Dispatch a client command and send response."""
         cmd = msg.get("command", "")
         msg_id = msg.get("id")
-        params = {k: v for k, v in msg.items() if k not in ("command", "id")}
+        # Preferred envelope going forward:
+        #   {"id": "1", "command": "switch_project", "params": {"name": "..."}}
+        # Back-compat: legacy "flat" params at top-level.
+        params = msg.get("params")
+        if not isinstance(params, dict):
+            params = {k: v for k, v in msg.items() if k not in ("command", "id", "params")}
 
         handlers = {
             "get_settings": self._cmd_get_settings,
@@ -189,10 +203,14 @@ class TranscriptWebSocket:
             "protocol_version": 1,
             "backend": {
                 "name": "meeting-buddy-backend",
+                "version": _git_short_sha(),
                 "started_at": self._session_start,
                 "uptime_s": round(time.time() - self._session_start, 3),
             },
             "active_project": active_project,
+            "capabilities": {
+                "command_params_envelope": True,
+            },
         }
 
     async def _cmd_set_api_key(self, params: dict) -> dict:

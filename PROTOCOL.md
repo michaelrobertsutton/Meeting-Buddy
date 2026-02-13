@@ -8,8 +8,14 @@ This document describes the **local WebSocket protocol** used between the UI (Ta
 ## Message types
 
 ### UI → Backend: Command
+Preferred envelope (Codable-friendly):
 ```json
-{ "id": "1", "command": "get_settings", "...params": "..." }
+{ "id": "1", "command": "get_settings", "params": { } }
+```
+
+Back-compat (legacy; still supported by backend):
+```json
+{ "id": "1", "command": "switch_project", "name": "Acme" }
 ```
 
 ### Backend → UI: Response
@@ -21,6 +27,11 @@ This document describes the **local WebSocket protocol** used between the UI (Ta
 ```json
 { "type": "response", "id": "1", "success": false, "error": "Unknown command" }
 ```
+
+Notes:
+- `id` is echoed from the command.
+- On success, `data` is present.
+- On failure, `error` is present.
 
 ### Backend → UI: Events
 Events are pushed without an id.
