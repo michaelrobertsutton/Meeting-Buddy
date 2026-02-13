@@ -274,6 +274,9 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.onboarding.classList.add('hidden');
         try { localStorage.setItem('mb_onboarding_done', '1'); } catch (_) {}
     }
+    
+    // Make hideOnboarding globally accessible so Rust can call it
+    window.__hideOnboarding = hideOnboarding;
 
     // Attach button handlers with multiple fallbacks
     function attachOnboardingHandlers() {
@@ -408,8 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Also try direct button access via onclick attribute as absolute fallback
     if (dom.btnOnboardingDone) {
-        dom.btnOnboardingDone.setAttribute('onclick', 'window.__hideOnboarding && window.__hideOnboarding()');
-        window.__hideOnboarding = hideOnboarding;
+        dom.btnOnboardingDone.setAttribute('onclick', 'if(window.__hideOnboarding) window.__hideOnboarding(); return false;');
     }
     if (dom.btnOpenScreen) {
         dom.btnOpenScreen.setAttribute('onclick', 'window.__openScreenSettings && window.__openScreenSettings()');

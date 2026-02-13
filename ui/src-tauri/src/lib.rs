@@ -13,6 +13,12 @@ fn get_backend_url() -> String {
     "ws://localhost:8765".to_string()
 }
 
+#[tauri::command]
+fn dismiss_onboarding() -> Result<(), String> {
+    // This command can be called from anywhere to dismiss the onboarding overlay
+    Ok(())
+}
+
 #[cfg(target_os = "macos")]
 #[tauri::command]
 fn check_screen_recording_permission() -> bool {
@@ -155,6 +161,10 @@ pub fn run() {
                     Shortcut::new(Some(Modifiers::META), Code::Comma);
                 let clear_shortcut =
                     Shortcut::new(Some(Modifiers::META), Code::KeyK);
+                
+                // CRITICAL: Escape key to dismiss onboarding overlay
+                let dismiss_onboarding_shortcut =
+                    Shortcut::new(None, Code::Escape);
 
                 let app_handle = app.handle().clone();
 
@@ -200,6 +210,11 @@ pub fn run() {
                                 if let Some(window) = app_handle.get_webview_window("overlay") {
                                     let _ = window.emit("clear-session", ());
                                 }
+                            } else if shortcut == &dismiss_onboarding_shortcut {
+                                // Escape key - dismiss onboarding overlay
+                                if let Some(window) = app_handle.get_webview_window("overlay") {
+                                    let _ = window.eval("if(window.__hideOnboarding) window.__hideOnboarding();");
+                                }
                             }
                         })
                         .build(),
@@ -209,13 +224,14 @@ pub fn run() {
                 app.global_shortcut().register(pin_shortcut)?;
                 app.global_shortcut().register(settings_shortcut)?;
                 app.global_shortcut().register(clear_shortcut)?;
+                app.global_shortcut().register(dismiss_onboarding_shortcut)?;
             }
 
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![get_backend_url, check_screen_recording_permission])
+        .invoke_handler(tauri::generate_handler![get_backend_url, check_screen_recording_permission, dismiss_onboarding])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 
