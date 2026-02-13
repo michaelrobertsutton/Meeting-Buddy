@@ -84,8 +84,8 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.bestPracticeList = document.getElementById('best-practice-list');
     dom.clarifierSection = document.getElementById('clarifiers');
     dom.clarifierList = document.getElementById('clarifier-list');
-    dom.citationsSummary = document.querySelector('#citations summary');
-    dom.citationList = document.getElementById('citation-list');
+    dom.citationPills = document.getElementById('citation-pills');
+    dom.citationPopover = document.getElementById('citation-popover');
     dom.transcriptContent = document.getElementById('transcript-content');
     dom.transcriptScroll = document.getElementById('transcript-scroll');
     dom.transcriptQuiet = document.getElementById('transcript-quiet');
@@ -230,6 +230,14 @@ document.addEventListener('DOMContentLoaded', () => {
     listen('toggle-pin', () => {
         togglePin();
     });
+
+    listen('open-settings', () => {
+        if (!state.settingsOpen) toggleSettings();
+    });
+
+    listen('clear-session', () => {
+        clearSession();
+    });
     
     // Listen for backend termination event
     listen('backend-terminated', (event) => {
@@ -278,6 +286,25 @@ function toggleSettings() {
             // Still show the settings panel even if loading fails
         });
     }
+}
+
+function clearSession() {
+    // Local UI reset (backend retains transcript unless restarted)
+    state.segments = [];
+    state.version = -1;
+    state.activeQuestion = null;
+    state.activeAnswer = null;
+    state.qaHistory = [];
+    state.pinned = false;
+    state.pinnedSegments = null;
+    state.lastTranscriptAtMs = 0;
+
+    renderQuestion(null);
+    dom.answerText.textContent = 'Waiting for question...';
+    dom.answerText.classList.add('placeholder');
+    dom.bulletList.innerHTML = '<li class="placeholder">Bullets will appear here</li>';
+    renderTranscript();
+    renderQAHistory();
 }
 
 async function exportSession() {
@@ -1010,6 +1037,15 @@ function handleMessage(msg) {
     }
 }
 
+function escapeHtml(s) {
+    return String(s || '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+}
+
 // --- Rendering ---
 function _splitSentences(text) {
     if (!text) return [];
@@ -1482,17 +1518,35 @@ function renderAnswer(data) {
     });
     dom.clarifierSection.classList.toggle('hidden', (data.clarifiers || []).length === 0);
 
-    // Citations with quotes
-    dom.citationList.innerHTML = '';
-    (data.citations || []).forEach((c) => {
-        const li = document.createElement('li');
-        const parts = [c.doc, c.section, c.page ? 'p.' + c.page : ''].filter(Boolean);
-        let text = parts.join(' - ');
-        if (c.quote) {
-            text += ': "' + c.quote + '"';
-        }
-        li.textContent = text;
-        dom.citationList.appendChild(li);
-    });
-    dom.citationsSummary.textContent = 'Citations (' + (data.citations || []).length + ')';
+    // Citations as pills with hover popover
+    if (dom.citationPills) {
+        dom.citationPills.innerHTML = '';
+        (data.citations || []).forEach((c, idx) => {
+            const pill = document.createElement('button');
+            pill.className = 'citation-pill';
+            pill.type = 'button';
+
+            const labelParts = [c.doc, c.page ? 'p.' + c.page : ''].filter(Boolean);
+            pill.textContent = labelParts.join(' · ') || ('Citation ' + (idx + 1));
+
+            pill.addEventListener('mouseenter', (e) => {
+                if (!dom.citationPopover) return;
+                const parts = [c.doc, c.section, c.page ? 'p.' + c.page : ''].filter(Boolean);
+                const header = parts.join(' — ');
+                const quote = c.quote ? ('"' + c.quote + '"') : '';
+                dom.citationPopover.innerHTML = `<div class="cp-title">${escapeHtml(header)}</div><div class="cp-quote">${escapeHtml(quote)}</div>`;
+                dom.citationPopover.classList.remove('hidden');
+
+                const rect = e.target.getBoundingClientRect();
+                dom.citationPopover.style.left = Math.max(12, rect.left) + 'px';
+                dom.citationPopover.style.top = (rect.top - 10) + 'px';
+            });
+            pill.addEventListener('mouseleave', () => {
+                if (!dom.citationPopover) return;
+                dom.citationPopover.classList.add('hidden');
+            });
+
+            dom.citationPills.appendChild(pill);
+        });
+    }
 }

@@ -1002,6 +1002,49 @@ body.pinned #drag-handle {
     background: rgba(255, 255, 255, 0.08);
 }
 
+/* Citations pills + hover popover */
+.citation-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 6px;
+}
+
+.citation-pill {
+    border: 1px solid color-mix(in srgb, var(--mb-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--mb-accent) 10%, transparent);
+    color: var(--mb-accent);
+    border-radius: 999px;
+    padding: 4px 8px;
+    font-size: 11px;
+    cursor: default;
+}
+
+.citation-popover {
+    position: fixed;
+    max-width: 360px;
+    transform: translateY(-100%);
+    border-radius: var(--mb-radius-md);
+    border: 0.5px solid rgba(255,255,255,0.14);
+    background: rgba(20, 20, 25, 0.92);
+    padding: 10px;
+    z-index: 1000;
+    pointer-events: none;
+}
+
+.citation-popover .cp-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--mb-text);
+}
+
+.citation-popover .cp-quote {
+    margin-top: 6px;
+    font-size: 11px;
+    color: var(--mb-text-secondary);
+    line-height: 1.35;
+}
+
 /* --- OAuth Login --- */
 
 .btn-login {
