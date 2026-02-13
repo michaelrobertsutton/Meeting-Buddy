@@ -117,13 +117,44 @@ class ProjectStore:
 
     def list_documents(self) -> list[str]:
         """Return distinct document titles in the store."""
+        return [d["title"] for d in self.list_document_details()]
+
+    def list_document_details(self) -> list[dict]:
+        """Return distinct documents with lightweight metadata for UI.
+
+        Output: [{title, source_path, size_bytes, indexed}]
+        """
         self._ensure_open()
         if self._table is None:
             return []
 
         table = self._table.to_arrow()
         titles = table.column("doc_title").to_pylist()
-        return sorted(set(titles))
+        paths = table.column("source_path").to_pylist()
+
+        # Use first seen source_path per title
+        first_path: dict[str, str] = {}
+        for t, p in zip(titles, paths):
+            if t not in first_path:
+                first_path[t] = p
+
+        out: list[dict] = []
+        for title in sorted(first_path.keys()):
+            sp = first_path.get(title, "")
+            size = 0
+            try:
+                if sp and Path(sp).exists():
+                    size = Path(sp).stat().st_size
+            except Exception:
+                size = 0
+            out.append({
+                "title": title,
+                "source_path": sp,
+                "size_bytes": size,
+                "indexed": True,
+            })
+
+        return out
 
     def delete_document(self, doc_title: str) -> int:
         """Delete all chunks for a document. Returns count deleted."""
