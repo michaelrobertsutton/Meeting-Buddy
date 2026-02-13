@@ -45,9 +45,9 @@ class TranscriptWebSocket:
         self._active_answer: dict | None = None
         self._synthesis_in_flight: bool = False
         self._ingestion_in_progress: bool = False
+        # In-memory history of Q&A pairs for the current session
         self._qa_history: list[dict] = []
         self._session_start: float = time.time()
-
         # Prep-mode cache (pre-meeting Q&A)
         self._prep_questions: list[str] = []
         self._prep_results: dict[str, dict] = {}  # question -> answer dict
@@ -111,12 +111,11 @@ class TranscriptWebSocket:
             "list_docs": self._cmd_list_docs,
             "ingest_files": self._cmd_ingest_files,
             "delete_doc": self._cmd_delete_doc,
-            "get_doc_meta": self._cmd_get_doc_meta,
-            "update_doc_meta": self._cmd_update_doc_meta,
             "start_login": self._cmd_start_login,
             "login_status": self._cmd_login_status,
             "logout": self._cmd_logout,
             "select_question": self._cmd_select_question,
+            "get_qa_history": self._cmd_get_qa_history,
             "set_question": self._cmd_set_question,
             "generate_prep_questions": self._cmd_generate_prep_questions,
             "get_prep_results": self._cmd_get_prep_results,
@@ -226,6 +225,8 @@ class TranscriptWebSocket:
 
         self._reload_retriever(name)
         self._active_answer = None
+        # Reset Q&A history when switching projects to keep sessions scoped
+        self._qa_history = []
 
         return {"active_project": name}
 
@@ -258,25 +259,7 @@ class TranscriptWebSocket:
             project_path = self._project_manager.get_project_path(active)
             store = ProjectStore(project_path)
             titles = store.list_documents()
-
-            registry = {}
-            try:
-                registry = self._project_manager.get_doc_registry(active)
-            except Exception:
-                registry = {}
-
-            docs = []
-            for t in titles:
-                meta = registry.get(t) if isinstance(registry, dict) else None
-                if not isinstance(meta, dict):
-                    meta = {}
-                docs.append({
-                    "title": t,
-                    "description": meta.get("description", ""),
-                    "priority": meta.get("priority", "normal"),
-                })
-
-            return {"docs": docs}
+            return {"docs": titles}
         except Exception:
             logger.exception("Failed to list docs")
             return {"docs": []}
@@ -314,57 +297,7 @@ class TranscriptWebSocket:
         # Reload retriever to pick up changes
         self._reload_retriever(active)
 
-        # Return refreshed list with meta
-        titles = store.list_documents()
-        registry = {}
-        try:
-            registry = self._project_manager.get_doc_registry(active)
-        except Exception:
-            registry = {}
-        docs = []
-        for t in titles:
-            meta = registry.get(t) if isinstance(registry, dict) else None
-            if not isinstance(meta, dict):
-                meta = {}
-            docs.append({
-                "title": t,
-                "description": meta.get("description", ""),
-                "priority": meta.get("priority", "normal"),
-            })
-
-        return {"deleted_chunks": deleted, "docs": docs}
-
-    async def _cmd_get_doc_meta(self, params: dict) -> dict:
-        """Return doc registry for active project."""
-        active = self._settings_manager.get_active_project() if self._settings_manager else ""
-        if not active or not self._project_manager:
-            return {"doc_registry": {}}
-        return {"doc_registry": self._project_manager.get_doc_registry(active)}
-
-    async def _cmd_update_doc_meta(self, params: dict) -> dict:
-        """Update per-document metadata (description/priority)."""
-        active = self._settings_manager.get_active_project() if self._settings_manager else ""
-        if not active or not self._project_manager:
-            raise RuntimeError("No active project")
-
-        title = (params.get("title") or "").strip()
-        if not title:
-            raise ValueError("title is required")
-
-        description = params.get("description")
-        priority = params.get("priority")
-
-        entry = self._project_manager.update_doc_meta(
-            active,
-            title,
-            description=description,
-            priority=priority,
-        )
-
-        # Reload retriever to pick up new priorities
-        self._reload_retriever(active)
-
-        return {"title": title, "meta": entry}
+        return {"deleted_chunks": deleted, "docs": store.list_documents()}
 
     # --- OAuth login commands ---
 
@@ -431,6 +364,11 @@ class TranscriptWebSocket:
         if text and self._synthesis_engine:
             asyncio.create_task(self._run_synthesis(text))
         return {"selected": text}
+
+    async def _cmd_get_qa_history(self, params: dict) -> dict:
+        """Return the current in-memory Q&A history for this session."""
+        # Return a shallow copy so callers can't mutate internal state
+        return {"qa_history": list(self._qa_history)}
 
     async def _cmd_set_question(self, params: dict) -> dict:
         """Manually override the active question with free-form text."""
@@ -683,12 +621,20 @@ class TranscriptWebSocket:
         try:
             result = await self._synthesis_engine.synthesize(question)
             if result is not None:
-                self._active_answer = result.to_dict()
-                self._qa_history.append({
-                    "question": question,
-                    "answer": self._active_answer,
-                    "timestamp": time.time(),
-                })
+                answer_dict = result.to_dict()
+                self._active_answer = answer_dict
+                # Append to in-memory Q&A history for this session
+                self._qa_history.append(
+                    {
+                        "question": question,
+                        "answer": answer_dict,
+                        "timestamp": time.time(),
+                    }
+                )
+                # Keep only the most recent N entries to avoid unbounded growth
+                max_history = 100
+                if len(self._qa_history) > max_history:
+                    self._qa_history = self._qa_history[-max_history:]
                 await self._broadcast_answer()
         except Exception:
             logger.exception("Synthesis task failed")
@@ -728,4 +674,6 @@ class TranscriptWebSocket:
         msg["synthesis_searching"] = self._synthesis_in_flight
         if self._active_answer:
             msg["active_answer"] = self._active_answer
+        # Always include Q&A history so new clients get full session context
+        msg["qa_history"] = list(self._qa_history)
         return msg

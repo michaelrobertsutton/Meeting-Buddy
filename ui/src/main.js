@@ -13,7 +13,7 @@ const state = {
     historyOpen: false,
     manualQuestion: false,
     synthesisSearching: false,
-
+    qaHistory: [],
     prepQuestions: [],
     prepResults: {},
 };
@@ -80,6 +80,9 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.qhCount = document.getElementById('qh-count');
     dom.questionHistoryPanel = document.getElementById('question-history-panel');
     dom.questionHistoryList = document.getElementById('question-history-list');
+
+    // Q&A history
+    dom.qaHistoryList = document.getElementById('qa-history-list');
 
     // Answer searching
     dom.answerSearching = document.getElementById('answer-searching');
@@ -824,6 +827,12 @@ function handleMessage(msg) {
         }
     }
 
+    // Update Q&A history (question + answer pairs)
+    if (msg.qa_history) {
+        state.qaHistory = msg.qa_history;
+        renderQaHistory();
+    }
+
     // Track manual mode
     state.manualQuestion = !!msg.manual_question;
     dom.btnAutoQuestion.classList.toggle('active', !state.manualQuestion);
@@ -932,6 +941,51 @@ function renderQuestionHistory() {
         }
         li.addEventListener('click', () => selectQuestion(q.text));
         dom.questionHistoryList.appendChild(li);
+    }
+}
+
+function renderQaHistory() {
+    if (!dom.qaHistoryList) return;
+    dom.qaHistoryList.innerHTML = '';
+
+    const items = [...state.qaHistory].reverse();
+    if (items.length === 0) {
+        const li = document.createElement('li');
+        li.textContent = 'No Q&A yet';
+        li.style.color = '#555';
+        li.style.fontStyle = 'italic';
+        li.style.cursor = 'default';
+        dom.qaHistoryList.appendChild(li);
+        return;
+    }
+
+    for (const item of items) {
+        const li = document.createElement('li');
+
+        const qDiv = document.createElement('div');
+        qDiv.className = 'qa-question';
+        qDiv.textContent = item.question || 'Unknown question';
+
+        const aDiv = document.createElement('div');
+        aDiv.className = 'qa-answer-preview';
+        const preview = item.answer && item.answer.one_liner
+            ? item.answer.one_liner
+            : (item.answer && item.answer.bullets && item.answer.bullets[0]) || '';
+        aDiv.textContent = preview;
+
+        li.appendChild(qDiv);
+        li.appendChild(aDiv);
+
+        li.addEventListener('click', () => {
+            if (item.question) {
+                renderQuestion(item.question);
+            }
+            if (item.answer) {
+                renderAnswer(item.answer);
+            }
+        });
+
+        dom.qaHistoryList.appendChild(li);
     }
 }
 
