@@ -99,6 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Onboarding modal
     dom.onboarding = document.getElementById('onboarding');
+    dom.onboardingMicRow = document.getElementById('onboarding-mic-row');
     dom.btnOpenScreen = document.getElementById('btn-open-screen');
     dom.btnOpenMic = document.getElementById('btn-open-mic');
     dom.btnOnboardingDone = document.getElementById('btn-onboarding-done');
@@ -465,6 +466,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 hideOnboarding();
                 return;
             }
+
+            // Check microphone permission so we only show mic row when it's not granted
+            let hasMicPermission = true;
+            try {
+                const { invoke } = window.__TAURI__.core;
+                hasMicPermission = await invoke('check_microphone_permission');
+                console.log('[Onboarding] Microphone permission status:', hasMicPermission);
+            } catch (err) {
+                console.warn('[Onboarding] Failed to check mic permission:', err);
+                // On failure, show mic row (safe default)
+                hasMicPermission = false;
+            }
             
             // Check if user has manually dismissed onboarding before
             // Only respect this if permission is still missing
@@ -475,6 +488,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Permission not granted, show overlay
             console.log('[Onboarding] Showing overlay - permission not granted');
             showOnboarding();
+
+            // Show microphone row only when mic permission is not granted
+            if (dom.onboardingMicRow) {
+                dom.onboardingMicRow.classList.toggle('hidden', hasMicPermission);
+            }
         } catch (err) {
             console.error('[Onboarding] Error checking permissions:', err);
             // If permission check fails (invoke not available, etc.), do NOT block the user.
