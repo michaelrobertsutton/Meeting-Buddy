@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Meeting Buddy Settings</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body class="settings-window" data-tauri-drag-region>
+  <div class="settings-shell" data-tauri-drag-region>
+    <aside class="settings-sidebar" data-tauri-drag-region>
+      <div class="settings-appname">Meeting Buddy</div>
+      <nav class="settings-nav" data-tauri-drag-region>
+        <button class="settings-nav-item active" data-page="general" data-tauri-drag-region="false">General</button>
+        <button class="settings-nav-item" data-page="documents" data-tauri-drag-region="false">Documents</button>
+        <button class="settings-nav-item" data-page="account" data-tauri-drag-region="false">OpenAI Account</button>
+      </nav>
+    </aside>
+
+    <main class="settings-main" data-tauri-drag-region>
+      <header class="settings-header" data-tauri-drag-region>
+        <div id="settings-title" class="settings-title">General</div>
+        <div id="backend-status" class="settings-status">Backend: Connecting...</div>
+      </header>
+
+      <section id="page-general" class="settings-page">
+        <div class="settings-section">
+          <h3>Project</h3>
+          <div class="settings-row">
+            <select id="project-select">
+              <option value="">No project</option>
+            </select>
+            <button id="btn-new-project" title="New project" data-tauri-drag-region="false">+</button>
+            <button id="btn-delete-project" title="Delete project" data-tauri-drag-region="false">−</button>
+          </div>
+          <div id="create-project-form" class="hidden">
+            <div class="settings-row">
+              <input type="text" id="new-project-name" placeholder="Project name" data-tauri-drag-region="false" />
+              <button id="btn-create-project" data-tauri-drag-region="false">Create</button>
+              <button id="btn-cancel-create" class="btn-secondary" data-tauri-drag-region="false">Cancel</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h3>Shortcuts</h3>
+          <div class="settings-hint">
+            <div><code>Option + Space</code> — Toggle HUD</div>
+            <div><code>Cmd + ,</code> — Open Settings</div>
+            <div><code>Cmd + K</code> — Clear Session</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-documents" class="settings-page hidden">
+        <div class="settings-section">
+          <h3>Documents</h3>
+          <div class="settings-row">
+            <button id="btn-add-files" data-tauri-drag-region="false">Add Files</button>
+            <button id="btn-add-folder" data-tauri-drag-region="false">Add Folder</button>
+            <button id="btn-reindex" class="btn-secondary" data-tauri-drag-region="false">Re-index All</button>
+          </div>
+          <div id="ingest-progress" class="hidden">
+            <div class="progress-bar"><div id="progress-fill"></div></div>
+            <span id="progress-text"></span>
+          </div>
+          <div class="docs-table">
+            <div class="docs-header">
+              <div class="col-status">Status</div>
+              <div class="col-name">File</div>
+              <div class="col-size">Size</div>
+              <div class="col-priority">Priority</div>
+              <div class="col-actions">Actions</div>
+            </div>
+            <div id="docs-rows" class="docs-rows"></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="page-account" class="settings-page hidden">
+        <div class="settings-section">
+          <h3>OpenAI Authentication</h3>
+          <div id="oauth-logged-out">
+            <button id="btn-login" class="btn-primary" data-tauri-drag-region="false">Login with OpenAI</button>
+            <div id="login-status" class="settings-status"></div>
+          </div>
+          <div id="oauth-logged-in" class="hidden">
+            <div class="oauth-user">
+              <span id="oauth-email"></span>
+              <button id="btn-logout" class="btn-danger" data-tauri-drag-region="false">Logout</button>
+            </div>
+          </div>
+
+          <details id="api-key-fallback" style="margin-top: 10px;">
+            <summary class="fallback-summary">Use API key instead</summary>
+            <div class="settings-row" style="margin-top: 6px;">
+              <input type="password" id="api-key-input" placeholder="sk-..." autocomplete="off" data-tauri-drag-region="false" />
+              <button id="btn-save-key" data-tauri-drag-region="false">Save</button>
+            </div>
+            <div id="api-key-status" class="settings-status"></div>
+          </details>
+        </div>
+      </section>
+
+      <div class="settings-footer">
+        <button id="btn-close-settings" class="btn-secondary" data-tauri-drag-region="false">Close</button>
+      </div>
+    </main>
+  </div>
+
+  <script src="src/settings.js"></script>
+</body>
+</html>
