@@ -272,11 +272,23 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         console.log('[Onboarding] Hiding overlay');
         dom.onboarding.classList.add('hidden');
-        try { localStorage.setItem('mb_onboarding_done', '1'); } catch (_) {}
+        try { 
+            localStorage.setItem('mb_onboarding_done', '1');
+            // Also set a flag to disable it entirely if user wants
+        } catch (_) {}
+    }
+    
+    function disableOnboardingPermanently() {
+        console.log('[Onboarding] Disabling onboarding permanently');
+        hideOnboarding();
+        try {
+            localStorage.setItem('mb_onboarding_disabled', '1');
+        } catch (_) {}
     }
     
     // Make hideOnboarding globally accessible so Rust can call it
     window.__hideOnboarding = hideOnboarding;
+    window.__disableOnboarding = disableOnboardingPermanently;
 
     // Attach button handlers with multiple fallbacks
     function attachOnboardingHandlers() {
