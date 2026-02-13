@@ -257,74 +257,116 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Onboarding actions
     function showOnboarding() {
-        if (!dom.onboarding) return;
+        if (!dom.onboarding) {
+            console.error('[Onboarding] DOM element not found!');
+            return;
+        }
+        console.log('[Onboarding] Showing overlay');
         dom.onboarding.classList.remove('hidden');
     }
+    
     function hideOnboarding() {
-        if (!dom.onboarding) return;
+        if (!dom.onboarding) {
+            console.error('[Onboarding] DOM element not found!');
+            return;
+        }
+        console.log('[Onboarding] Hiding overlay');
         dom.onboarding.classList.add('hidden');
         try { localStorage.setItem('mb_onboarding_done', '1'); } catch (_) {}
     }
 
-    if (dom.btnOnboardingDone) {
-        dom.btnOnboardingDone.addEventListener('click', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('[Onboarding] Done button clicked');
-            hideOnboarding();
-        });
+    // Attach button handlers with multiple fallbacks
+    function attachOnboardingHandlers() {
+        console.log('[Onboarding] Attaching handlers...');
+        console.log('[Onboarding] btnOnboardingDone:', dom.btnOnboardingDone);
+        console.log('[Onboarding] btnOpenScreen:', dom.btnOpenScreen);
+        console.log('[Onboarding] btnOpenMic:', dom.btnOpenMic);
+        
+        // Done button - MUST work
+        if (dom.btnOnboardingDone) {
+            // Remove any existing listeners
+            const newDoneBtn = dom.btnOnboardingDone.cloneNode(true);
+            dom.btnOnboardingDone.parentNode.replaceChild(newDoneBtn, dom.btnOnboardingDone);
+            dom.btnOnboardingDone = newDoneBtn;
+            
+            dom.btnOnboardingDone.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[Onboarding] Done button clicked - handler fired!');
+                hideOnboarding();
+            });
+            console.log('[Onboarding] Done button handler attached');
+        } else {
+            console.error('[Onboarding] Done button not found in DOM!');
+        }
+        
+        // Screen Recording button
+        if (dom.btnOpenScreen) {
+            const newScreenBtn = dom.btnOpenScreen.cloneNode(true);
+            dom.btnOpenScreen.parentNode.replaceChild(newScreenBtn, dom.btnOpenScreen);
+            dom.btnOpenScreen = newScreenBtn;
+            
+            dom.btnOpenScreen.addEventListener('click', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[Onboarding] Screen Settings button clicked - handler fired!');
+                try {
+                    const { open } = window.__TAURI__.shell;
+                    console.log('[Onboarding] Calling shell.open()...');
+                    await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+                    console.log('[Onboarding] Screen settings opened successfully');
+                } catch (err) {
+                    console.error('[Onboarding] shell.open() failed:', err);
+                    // Fallback: try opening System Preferences directly
+                    try {
+                        const { open } = window.__TAURI__.shell;
+                        await open('x-apple.systempreferences:');
+                    } catch (fallbackErr) {
+                        console.error('[Onboarding] Fallback also failed:', fallbackErr);
+                        alert('Failed to open System Settings. Please manually go to System Settings > Privacy & Security > Screen Recording');
+                    }
+                }
+            });
+            console.log('[Onboarding] Screen button handler attached');
+        } else {
+            console.error('[Onboarding] Screen button not found in DOM!');
+        }
+        
+        // Microphone button
+        if (dom.btnOpenMic) {
+            const newMicBtn = dom.btnOpenMic.cloneNode(true);
+            dom.btnOpenMic.parentNode.replaceChild(newMicBtn, dom.btnOpenMic);
+            dom.btnOpenMic = newMicBtn;
+            
+            dom.btnOpenMic.addEventListener('click', async function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('[Onboarding] Mic Settings button clicked - handler fired!');
+                try {
+                    const { open } = window.__TAURI__.shell;
+                    console.log('[Onboarding] Calling shell.open()...');
+                    await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+                    console.log('[Onboarding] Mic settings opened successfully');
+                } catch (err) {
+                    console.error('[Onboarding] shell.open() failed:', err);
+                    // Fallback: try opening System Preferences directly
+                    try {
+                        const { open } = window.__TAURI__.shell;
+                        await open('x-apple.systempreferences:');
+                    } catch (fallbackErr) {
+                        console.error('[Onboarding] Fallback also failed:', fallbackErr);
+                        alert('Failed to open System Settings. Please manually go to System Settings > Privacy & Security > Microphone');
+                    }
+                }
+            });
+            console.log('[Onboarding] Mic button handler attached');
+        } else {
+            console.error('[Onboarding] Mic button not found in DOM!');
+        }
     }
     
-    if (dom.btnOpenScreen) {
-        dom.btnOpenScreen.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('[Onboarding] Open Screen Settings button clicked');
-            try {
-                const { Command } = window.__TAURI__.shell;
-                // Use macOS 'open' command with System Settings URL
-                const cmd = Command.new('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture']);
-                await cmd.execute();
-                console.log('[Onboarding] Screen settings opened successfully');
-            } catch (err) {
-                console.error('[Onboarding] open screen settings failed:', err);
-                // Try alternative approach
-                try {
-                    const { Command } = window.__TAURI__.shell;
-                    const cmd = Command.new('open', ['-b', 'com.apple.systempreferences']);
-                    await cmd.execute();
-                } catch (fallbackErr) {
-                    console.error('[Onboarding] Fallback also failed:', fallbackErr);
-                    alert('Failed to open System Settings. Please manually go to System Settings > Privacy & Security > Screen Recording');
-                }
-            }
-        });
-    }
-    
-    if (dom.btnOpenMic) {
-        dom.btnOpenMic.addEventListener('click', async (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            console.log('[Onboarding] Open Mic Settings button clicked');
-            try {
-                const { Command } = window.__TAURI__.shell;
-                const cmd = Command.new('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone']);
-                await cmd.execute();
-                console.log('[Onboarding] Mic settings opened successfully');
-            } catch (err) {
-                console.error('[Onboarding] open mic settings failed:', err);
-                // Try alternative approach
-                try {
-                    const { Command } = window.__TAURI__.shell;
-                    const cmd = Command.new('open', ['-b', 'com.apple.systempreferences']);
-                    await cmd.execute();
-                } catch (fallbackErr) {
-                    console.error('[Onboarding] Fallback also failed:', fallbackErr);
-                    alert('Failed to open System Settings. Please manually go to System Settings > Privacy & Security > Microphone');
-                }
-            }
-        });
-    }
+    // Attach handlers immediately
+    attachOnboardingHandlers();
 
     // Check permissions and show onboarding if needed
     async function checkAndShowOnboarding() {
