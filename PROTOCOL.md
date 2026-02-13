@@ -17,6 +17,11 @@ This document describes the **local WebSocket protocol** used between the UI (Ta
 { "type": "response", "id": "1", "success": true, "data": { } }
 ```
 
+### Error response
+```json
+{ "type": "response", "id": "1", "success": false, "error": "Unknown command" }
+```
+
 ### Backend → UI: Events
 Events are pushed without an id.
 
@@ -25,8 +30,12 @@ The backend periodically sends:
 - `type: "snapshot"` on initial connect
 - `type: "update"` on transcript/question changes
 
-Common fields:
+### Required fields
+- `type` ("snapshot" | "update")
+- `protocol_version` (integer, currently `1`)
 - `version` (monotonic integer)
+
+### Common fields (may be absent)
 - `segments` (transcript segments)
 - `active_question`
 - `question_history`
@@ -35,6 +44,26 @@ Common fields:
 - `active_answer`
 - `qa_history`
 - `pinned`
+
+### Example (snapshot/update)
+```json
+{
+  "type": "update",
+  "protocol_version": 1,
+  "version": 42,
+  "active_question": "What is our launch timeline?",
+  "manual_question": false,
+  "synthesis_searching": false,
+  "segments": [
+    {"start_time": 0.0, "end_time": 2.1, "text": "…"}
+  ],
+  "active_answer": {
+    "one_liner": "…",
+    "bullets": ["…"],
+    "citations": []
+  }
+}
+```
 
 ## Commands (current)
 
@@ -86,7 +115,26 @@ Common fields:
 - `auth_error { error }`
 - `auth_logout`
 
+### Example: answer_update
+```json
+{
+  "type": "answer_update",
+  "active_answer": {
+    "one_liner": "One sentence answer",
+    "bullets": ["Evidence-backed bullet"],
+    "best_practice_bullets": [],
+    "clarifiers": [],
+    "citations": [
+      {"doc": "Doc.pdf", "section": "Intro", "page": 1, "quote": "…"}
+    ],
+    "confidence": 0.8
+  }
+}
+```
+
 ---
 
-## Future: protocol versioning
-Add `protocol_version` on snapshot/update to allow non-breaking evolution.
+## Protocol versioning
+- `protocol_version` is included on `snapshot`/`update` and is currently `1`.
+- Clients should ignore unknown fields.
+- Backends should not remove fields without bumping protocol_version.
