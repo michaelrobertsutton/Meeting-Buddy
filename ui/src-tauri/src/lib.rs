@@ -13,6 +13,28 @@ fn get_backend_url() -> String {
     "ws://localhost:8765".to_string()
 }
 
+#[cfg(target_os = "macos")]
+#[tauri::command]
+fn check_screen_recording_permission() -> bool {
+    // Use CoreGraphics API to check Screen Recording permission
+    // Note: This may return false even after permission is granted until app restart
+    // Returns true if permission is granted, false otherwise
+    unsafe {
+        #[link(name = "CoreGraphics", kind = "framework")]
+        extern "C" {
+            fn CGPreflightScreenCaptureAccess() -> bool;
+        }
+        CGPreflightScreenCaptureAccess()
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+#[tauri::command]
+fn check_screen_recording_permission() -> bool {
+    // Not macOS, assume permission granted (or not applicable)
+    true
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let app = tauri::Builder::default()
@@ -179,7 +201,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![get_backend_url])
+        .invoke_handler(tauri::generate_handler![get_backend_url, check_screen_recording_permission])
         .build(tauri::generate_context!())
         .expect("error while building tauri application");
 

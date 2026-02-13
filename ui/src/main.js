@@ -266,33 +266,100 @@ document.addEventListener('DOMContentLoaded', () => {
         try { localStorage.setItem('mb_onboarding_done', '1'); } catch (_) {}
     }
 
-    dom.btnOnboardingDone.addEventListener('click', hideOnboarding);
-    dom.btnOpenScreen.addEventListener('click', async () => {
-        try {
-            const { open } = window.__TAURI__.shell;
-            // Deep-link into Privacy & Security. Some macOS versions may ignore the sub-pane.
-            await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
-        } catch (err) {
-            console.error('[Onboarding] open screen settings failed:', err);
-        }
-    });
-    dom.btnOpenMic.addEventListener('click', async () => {
-        try {
-            const { open } = window.__TAURI__.shell;
-            await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
-        } catch (err) {
-            console.error('[Onboarding] open mic settings failed:', err);
-        }
-    });
+    if (dom.btnOnboardingDone) {
+        dom.btnOnboardingDone.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Onboarding] Done button clicked');
+            hideOnboarding();
+        });
+    }
+    
+    if (dom.btnOpenScreen) {
+        dom.btnOpenScreen.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Onboarding] Open Screen Settings button clicked');
+            try {
+                const { Command } = window.__TAURI__.shell;
+                // Use macOS 'open' command with System Settings URL
+                const cmd = Command.new('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture']);
+                await cmd.execute();
+                console.log('[Onboarding] Screen settings opened successfully');
+            } catch (err) {
+                console.error('[Onboarding] open screen settings failed:', err);
+                // Try alternative approach
+                try {
+                    const { Command } = window.__TAURI__.shell;
+                    const cmd = Command.new('open', ['-b', 'com.apple.systempreferences']);
+                    await cmd.execute();
+                } catch (fallbackErr) {
+                    console.error('[Onboarding] Fallback also failed:', fallbackErr);
+                    alert('Failed to open System Settings. Please manually go to System Settings > Privacy & Security > Screen Recording');
+                }
+            }
+        });
+    }
+    
+    if (dom.btnOpenMic) {
+        dom.btnOpenMic.addEventListener('click', async (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('[Onboarding] Open Mic Settings button clicked');
+            try {
+                const { Command } = window.__TAURI__.shell;
+                const cmd = Command.new('open', ['x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone']);
+                await cmd.execute();
+                console.log('[Onboarding] Mic settings opened successfully');
+            } catch (err) {
+                console.error('[Onboarding] open mic settings failed:', err);
+                // Try alternative approach
+                try {
+                    const { Command } = window.__TAURI__.shell;
+                    const cmd = Command.new('open', ['-b', 'com.apple.systempreferences']);
+                    await cmd.execute();
+                } catch (fallbackErr) {
+                    console.error('[Onboarding] Fallback also failed:', fallbackErr);
+                    alert('Failed to open System Settings. Please manually go to System Settings > Privacy & Security > Microphone');
+                }
+            }
+        });
+    }
 
-    // Show onboarding on first run (best-effort)
-    try {
-        if (!localStorage.getItem('mb_onboarding_done')) {
+    // Check permissions and show onboarding if needed
+    async function checkAndShowOnboarding() {
+        try {
+            // Check if user has already dismissed onboarding
+            if (localStorage.getItem('mb_onboarding_done')) {
+                return;
+            }
+            
+            // Check Screen Recording permission
+            try {
+                const { invoke } = window.__TAURI__.core;
+                const hasPermission = await invoke('check_screen_recording_permission');
+                console.log('[Onboarding] Screen Recording permission status:', hasPermission);
+                
+                // Only show overlay if permission is not granted
+                if (!hasPermission) {
+                    showOnboarding();
+                } else {
+                    // Permission granted, mark as done
+                    localStorage.setItem('mb_onboarding_done', '1');
+                }
+            } catch (err) {
+                console.warn('[Onboarding] Failed to check permission, showing overlay:', err);
+                // If check fails, show overlay to be safe
+                showOnboarding();
+            }
+        } catch (_) {
+            // If anything fails, show onboarding
             showOnboarding();
         }
-    } catch (_) {
-        // ignore
     }
+    
+    // Check permissions on startup
+    checkAndShowOnboarding();
 
     connectWebSocket();
 });
