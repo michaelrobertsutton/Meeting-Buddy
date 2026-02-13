@@ -9,6 +9,10 @@ final class WebSocketClient: ObservableObject {
     @Published var activeQuestion: String = ""
     @Published var oneLiner: String = ""
 
+    // For Issue #120 header controls (stubbed until backend supports projects list via snapshot)
+    @Published var availableProjects: [String] = []
+    @Published var activeProject: String = ""
+
     private var task: URLSessionWebSocketTask?
     private let url: URL
 
@@ -111,6 +115,11 @@ final class WebSocketClient: ObservableObject {
             if let segs = msg.segments { self.segments = segs }
             self.activeQuestion = msg.active_question ?? self.activeQuestion
             self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner
+
+            // Opportunistic: if we ever include these fields in snapshot/update, wire them.
+            // (Safe no-ops today.)
+            // self.activeProject = msg.active_project ?? self.activeProject
+            // self.availableProjects = msg.projects ?? self.availableProjects
         }
     }
 }

@@ -5,28 +5,27 @@ struct ContentView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Meeting Buddy")
-                    .font(.system(size: 22, weight: .semibold, design: .rounded))
+            ToolbarView(ws: ws)
+
+            HStack(spacing: 8) {
+                Circle()
+                    .fill(ws.connected ? Color.green.opacity(0.9) : Color.red.opacity(0.9))
+                    .frame(width: 8, height: 8)
+
+                Text(ws.connected ? "Connected" : "Disconnected")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
 
                 Spacer()
-
-                HStack(spacing: 6) {
-                    Circle()
-                        .fill(ws.connected ? Color.green.opacity(0.9) : Color.red.opacity(0.9))
-                        .frame(width: 8, height: 8)
-
-                    Text(ws.connected ? "Connected" : "Disconnected")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
             }
+            .padding(.horizontal, 16)
 
             if let err = ws.lastError, !err.isEmpty {
                 Text("Error: \(err)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(2)
+                    .padding(.horizontal, 16)
             }
 
             GroupBox("Active Question") {
@@ -34,12 +33,14 @@ struct ContentView: View {
                     .font(.headline)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(.horizontal, 12)
 
             GroupBox("Answer") {
                 Text(ws.oneLiner.isEmpty ? "Waiting…" : ws.oneLiner)
                     .font(.body.weight(.semibold))
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(.horizontal, 12)
 
             GroupBox("Transcript") {
                 ScrollView {
@@ -54,6 +55,7 @@ struct ContentView: View {
                 }
                 .frame(maxHeight: 220)
             }
+            .padding(.horizontal, 12)
 
             HStack {
                 Button("Reconnect") {
@@ -67,6 +69,7 @@ struct ContentView: View {
 
                 Spacer()
             }
+            .padding(.horizontal, 16)
 
             Spacer(minLength: 0)
         }
