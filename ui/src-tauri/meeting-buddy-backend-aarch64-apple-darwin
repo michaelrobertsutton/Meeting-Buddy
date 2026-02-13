@@ -1,120 +1,53 @@
 #!/bin/bash
-# Use -e but not -u (allow unset vars) and -o pipefail for better error handling
-set -eo pipefail
+set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# --- Locate project root ---
-PROJECT_ROOT=""
+# --- Venv resolution (priority order for distribution + dev) ---
+if [ -n "${MEETINGBUDDY_VENV:-}" ] && [ -d "$MEETINGBUDDY_VENV" ]; then
+    VENV="$MEETINGBUDDY_VENV"
+elif [ -d "$HOME/.meeting-buddy/venv" ]; then
+    VENV="$HOME/.meeting-buddy/venv"
+elif [ -d "$SCRIPT_DIR/../Resources/venv" ]; then
+    VENV="$SCRIPT_DIR/../Resources/venv"
+elif [ -n "${MEETINGBUDDY_PROJECT_ROOT:-}" ] && [ -d "$MEETINGBUDDY_PROJECT_ROOT/.venv" ]; then
+    VENV="$MEETINGBUDDY_PROJECT_ROOT/.venv"
+else
+    echo "ERROR: No Python venv found." >&2
+    echo "Run: bash scripts/install.sh" >&2
+    exit 1
+fi
+
+source "$VENV/bin/activate"
+
+# --- PYTHONPATH for backend/ and ingest/ ---
 if [ -n "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
-    PROJECT_ROOT="$MEETINGBUDDY_PROJECT_ROOT"
-    echo "[meeting-buddy-backend] Using MEETINGBUDDY_PROJECT_ROOT: $PROJECT_ROOT" >&2
-elif [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
-    # Running from .app bundle
-    # .app is at <project>/ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app
-    # SCRIPT_DIR = .../Meeting Buddy.app/Contents/MacOS
-    # From .app root: macos/ -> bundle/ -> release/ -> target/ -> src-tauri/ -> ui/ -> project
-    APP_BUNDLE="$SCRIPT_DIR/../.."
-    echo "[meeting-buddy-backend] Running from app bundle, detecting project root..." >&2
-    
-    # Try the expected path first
-    CANDIDATE="$(cd "$APP_BUNDLE/../../../../../../.." 2>/dev/null && pwd)" || CANDIDATE=""
-    
-    if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE/backend/main.py" ]; then
-        PROJECT_ROOT="$CANDIDATE"
-        echo "[meeting-buddy-backend] Found project root: $PROJECT_ROOT" >&2
-    else
-        # Try alternative: maybe app was copied to Applications, look for common locations
-        echo "[meeting-buddy-backend] Standard path not found, trying alternatives..." >&2
-        
-        # Check if we can find it relative to common locations
-        for alt_path in \
-            "$HOME/Documents/Repos/Meeting Buddy" \
-            "$HOME/Repos/Meeting Buddy" \
-            "$HOME/Meeting Buddy" \
-            "/opt/meeting-buddy" \
-            "/usr/local/meeting-buddy"
-        do
-            if [ -f "$alt_path/backend/main.py" ]; then
-                PROJECT_ROOT="$alt_path"
-                echo "[meeting-buddy-backend] Found project root at: $PROJECT_ROOT" >&2
-                break
-            fi
-        done
-        
-        if [ -z "$PROJECT_ROOT" ]; then
-            echo "ERROR: Cannot find project root." >&2
-            echo "Tried:" >&2
-            echo "  - $CANDIDATE" >&2
-            echo "  - Common locations (Documents/Repos, etc.)" >&2
-            echo "" >&2
-            echo "Set MEETINGBUDDY_PROJECT_ROOT environment variable to the Meeting Buddy repo root." >&2
-            echo "Example: export MEETINGBUDDY_PROJECT_ROOT=\"/path/to/Meeting Buddy\"" >&2
-            exit 1
+    export PYTHONPATH="${MEETINGBUDDY_PROJECT_ROOT}:${PYTHONPATH:-}"
+elif [ -d "$SCRIPT_DIR/../Resources/src" ]; then
+    export PYTHONPATH="$SCRIPT_DIR/../Resources/src:${PYTHONPATH:-}"
+fi
+
+# --- Project root (for backend; optional when using bundled Resources) ---
+if [ -z "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
+    if [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
+        APP_BUNDLE="$SCRIPT_DIR/../.."
+        CANDIDATE="$(cd "$APP_BUNDLE/../../../../../../.." 2>/dev/null && pwd)" || CANDIDATE=""
+        if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE/backend/main.py" ]; then
+            export MEETINGBUDDY_PROJECT_ROOT="$CANDIDATE"
         fi
+    else
+        export MEETINGBUDDY_PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
     fi
-else
-    # Dev mode — script is at <project>/ui/src-tauri/
-    PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-    echo "[meeting-buddy-backend] Dev mode, project root: $PROJECT_ROOT" >&2
 fi
 
-# --- Locate AudioCapture binary ---
+# --- AudioCapture binary ---
 if [ -n "${MEETINGBUDDY_AUDIO_BINARY:-}" ]; then
-    : # Already set by caller
+    : # already set
 elif [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
-    # Bundled alongside us in Contents/MacOS/
     export MEETINGBUDDY_AUDIO_BINARY="$SCRIPT_DIR/AudioCapture"
 else
-    # Dev mode — use the Swift build output
-    export MEETINGBUDDY_AUDIO_BINARY="$PROJECT_ROOT/audio-capture/.build/release/AudioCapture"
+    ROOT="${MEETINGBUDDY_PROJECT_ROOT:-$(cd "$SCRIPT_DIR/../.." && pwd)}"
+    export MEETINGBUDDY_AUDIO_BINARY="$ROOT/audio-capture/.build/release/AudioCapture"
 fi
 
-export MEETINGBUDDY_PROJECT_ROOT="$PROJECT_ROOT"
-
-# --- Locate AudioCapture binary ---
-if [ -n "${MEETINGBUDDY_AUDIO_BINARY:-}" ]; then
-    echo "[meeting-buddy-backend] Using MEETINGBUDDY_AUDIO_BINARY: $MEETINGBUDDY_AUDIO_BINARY" >&2
-elif [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
-    # Bundled alongside us in Contents/MacOS/
-    export MEETINGBUDDY_AUDIO_BINARY="$SCRIPT_DIR/AudioCapture"
-    if [ ! -f "$MEETINGBUDDY_AUDIO_BINARY" ]; then
-        echo "WARNING: AudioCapture binary not found at $MEETINGBUDDY_AUDIO_BINARY" >&2
-    else
-        echo "[meeting-buddy-backend] Using bundled AudioCapture: $MEETINGBUDDY_AUDIO_BINARY" >&2
-    fi
-else
-    # Dev mode — use the Swift build output
-    export MEETINGBUDDY_AUDIO_BINARY="$PROJECT_ROOT/audio-capture/.build/release/AudioCapture"
-    if [ ! -f "$MEETINGBUDDY_AUDIO_BINARY" ]; then
-        echo "WARNING: AudioCapture binary not found at $MEETINGBUDDY_AUDIO_BINARY" >&2
-        echo "Build it with: cd audio-capture && swift build -c release" >&2
-    else
-        echo "[meeting-buddy-backend] Using dev AudioCapture: $MEETINGBUDDY_AUDIO_BINARY" >&2
-    fi
-fi
-
-export MEETINGBUDDY_PROJECT_ROOT="$PROJECT_ROOT"
-
-# --- Activate Python virtual environment ---
-VENV="$PROJECT_ROOT/.venv"
-if [ -f "$VENV/bin/activate" ]; then
-    source "$VENV/bin/activate"
-    echo "[meeting-buddy-backend] Activated virtual environment" >&2
-else
-    echo "ERROR: Virtual environment not found at $VENV" >&2
-    echo "The bundled app requires the project's .venv directory to exist." >&2
-    echo "Create it with: cd \"$PROJECT_ROOT\" && python3 -m venv .venv && source .venv/bin/activate && pip install -e ." >&2
-    exit 1
-fi
-
-# --- Verify Python and dependencies ---
-if ! command -v python &> /dev/null && ! command -v python3 &> /dev/null; then
-    echo "ERROR: Python not found in PATH" >&2
-    exit 1
-fi
-
-# --- Run the backend ---
-cd "$PROJECT_ROOT"
-echo "[meeting-buddy-backend] Starting backend from $PROJECT_ROOT" >&2
 exec python -m backend.main "$@"

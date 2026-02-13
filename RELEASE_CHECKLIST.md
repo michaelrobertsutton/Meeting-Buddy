@@ -4,27 +4,33 @@ This checklist is meant to keep releases boring. Run it before cutting a new bui
 
 ## 0) Pre-flight
 - [ ] You are on `main` and up-to-date (`git pull`)
-- [ ] CI is green for the commit you’re releasing
+- [ ] CI is green for the commit you're releasing
 - [ ] No uncommitted changes (`git status`)
 
-## 1) Build prerequisites
-- [ ] Python venv exists at repo root: `.venv/` (required by current sidecar runtime)
-- [ ] AudioCapture helper builds:
-  - [ ] `cd audio-capture && swift build -c release`
-- [ ] UI dependencies installed:
-  - [ ] `cd ui && npm ci`
+## 1) Build
 
-## 2) Build the app bundle
-- [ ] `cd ui && npm run tauri build`
-- [ ] Confirm the bundle exists:
-  - [ ] `ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app`
+**Prerequisites:** Rust (rustup), Xcode CLT, Node 20+, Python 3.9+
 
-## 3) Sidecar binaries present in the bundle
-Verify the bundle includes required external binaries:
-- [ ] `meeting-buddy-backend` (Python backend sidecar)
+1. Run: `bash scripts/build-release.sh`
+2. App: `ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app`
+3. DMG (if hdiutil present): `dist/MeetingBuddy.dmg`
+
+## 2) Fresh-machine install test
+
+1. Copy `Meeting Buddy.app` to a machine without the repo (or use the DMG).
+2. Run one-time setup: `bash scripts/install.sh` (from a clone that has `scripts/`, or document this step for users).
+3. Launch the app — HUD should appear and backend should start (venv at `~/.meeting-buddy/venv`).
+4. Verify: transcript updates, Cmd+, opens settings, Q&A works.
+
+## 3) Sidecar binaries in the bundle
+
+Verify the bundle includes:
+- [ ] `meeting-buddy-backend` (Python backend sidecar script)
 - [ ] `AudioCapture` (Swift ScreenCaptureKit helper)
+- [ ] `MeetingBuddySettings` (native settings executable)
 
 ## 4) Permissions (most common failure mode)
+
 In **System Settings → Privacy & Security**:
 
 ### Screen Recording
@@ -35,6 +41,7 @@ In **System Settings → Privacy & Security**:
 - [ ] Permission granted if you intend to capture mic audio
 
 ## 5) Runtime sanity checks
+
 Launch the app and confirm:
 - [ ] HUD appears and remains always-on-top
 - [ ] HUD toggles with `Option + Space`
@@ -48,6 +55,7 @@ Launch the app and confirm:
 - [ ] Export works (writes Markdown/JSON to disk)
 
 ## 6) Document ingestion checks
+
 - [ ] Create/switch project
 - [ ] Add a local PDF/DOCX/MD/HTML document
 - [ ] Add a URL document
@@ -55,15 +63,18 @@ Launch the app and confirm:
 - [ ] Ask a question that should retrieve content from the ingested doc
 
 ## 7) Packaging / distribution
+
 - [ ] Install in `/Applications` (optional)
 - [ ] Verify app launches from Spotlight / Finder
 
 ## 8) Rollback plan
+
 - [ ] Keep the last known-good `.app` build available
 - [ ] If release fails due to permissions: reset Screen Recording permission, relaunch
 
 ---
 
 ## Notes / Known constraints
-- Backend sidecar currently expects a `.venv` directory at the project root at runtime.
+
+- The backend sidecar looks for a Python venv in this order: `MEETINGBUDDY_VENV`, `~/.meeting-buddy/venv`, `Contents/Resources/venv`, or (in dev) `MEETINGBUDDY_PROJECT_ROOT/.venv`. Run `scripts/install.sh` to create `~/.meeting-buddy/venv` on a fresh machine.
 - macOS permission checks can require an app restart to reflect the updated state.
