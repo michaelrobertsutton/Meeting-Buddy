@@ -26,6 +26,17 @@ Agent/area labels (optional but recommended):
 - `area:ui` — UI/Tauri work
 - `area:ingest` — ingestion/retrieval work
 
+## Local dev quality tools (recommended)
+
+We use `ruff` + `pytest` in CI. For the best experience locally, install pre-commit:
+
+```bash
+python3 -m pip install pre-commit
+pre-commit install
+```
+
+This repo ships a `.pre-commit-config.yaml` that runs ruff (incl. auto-fix) and basic hygiene checks.
+
 ## Branch + PR workflow
 
 - **One issue per branch**. Use a name like: `feature/<issue-or-phase>-<short-slug>`
