@@ -190,7 +190,6 @@ pub fn run() {
                                     .inner_size(860.0, 600.0)
                                     .resizable(true)
                                     .decorations(true)
-                                    .transparent(true)
                                     .build();
                                 }
                                 if let Some(w) = app_handle.get_webview_window("settings") {
