@@ -97,6 +97,12 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.settingsDrawer = document.getElementById('settings-drawer');
     dom.content = document.getElementById('content');
 
+    // Onboarding modal
+    dom.onboarding = document.getElementById('onboarding');
+    dom.btnOpenScreen = document.getElementById('btn-open-screen');
+    dom.btnOpenMic = document.getElementById('btn-open-mic');
+    dom.btnOnboardingDone = document.getElementById('btn-onboarding-done');
+
     // Header project switcher
     dom.headerProject = document.getElementById('header-project');
     dom.quickQuestion = document.getElementById('quick-question');
@@ -240,6 +246,45 @@ document.addEventListener('DOMContentLoaded', () => {
             dom.backendStatus.className = 'error';
         }
     });
+
+    // Onboarding actions
+    function showOnboarding() {
+        if (!dom.onboarding) return;
+        dom.onboarding.classList.remove('hidden');
+    }
+    function hideOnboarding() {
+        if (!dom.onboarding) return;
+        dom.onboarding.classList.add('hidden');
+        try { localStorage.setItem('mb_onboarding_done', '1'); } catch (_) {}
+    }
+
+    dom.btnOnboardingDone.addEventListener('click', hideOnboarding);
+    dom.btnOpenScreen.addEventListener('click', async () => {
+        try {
+            const { open } = window.__TAURI__.shell;
+            // Deep-link into Privacy & Security. Some macOS versions may ignore the sub-pane.
+            await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+        } catch (err) {
+            console.error('[Onboarding] open screen settings failed:', err);
+        }
+    });
+    dom.btnOpenMic.addEventListener('click', async () => {
+        try {
+            const { open } = window.__TAURI__.shell;
+            await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+        } catch (err) {
+            console.error('[Onboarding] open mic settings failed:', err);
+        }
+    });
+
+    // Show onboarding on first run (best-effort)
+    try {
+        if (!localStorage.getItem('mb_onboarding_done')) {
+            showOnboarding();
+        }
+    } catch (_) {
+        // ignore
+    }
 
     connectWebSocket();
 });
