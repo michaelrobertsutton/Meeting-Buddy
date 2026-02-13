@@ -57,14 +57,17 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 | `backend/audio/sck_capture.py` | ScreenCaptureKit bridge (spawns Swift binary) |
 | `backend/asr/streaming.py` | VAD → ASR state machine |
 | `backend/question/extractor.py` | Heuristic active question detection |
-| `backend/synthesis/engine.py` | LLM synthesis (API key or OAuth modes) |
+| `backend/synthesis/engine.py` | LLM synthesis (API key or OAuth modes, streaming) |
 | `backend/synthesis/prompt.py` | System/user prompts for synthesis |
-| `backend/server/websocket.py` | Bidirectional WebSocket server |
+| `backend/synthesis/prep.py` | Pre-meeting prep question generation |
+| `backend/server/websocket.py` | Bidirectional WebSocket server (Q&A history, export, prep) |
 | `backend/auth/oauth.py` | OpenAI OAuth token management |
+| `backend/export/renderer.py` | Session export (Markdown/JSON) |
 | `ingest/retriever.py` | Cosine similarity search over LanceDB |
 | `ingest/project_manager.py` | Project CRUD, metadata.json per project |
-| `ui/src/main.js` | WebSocket client, settings UI, file picker |
-| `ui/src/style.css` | Dark theme styles |
+| `ingest/parsers/url_parser.py` | Web URL fetching and HTML parsing |
+| `ui/src/main.js` | WebSocket client, settings UI, file picker, prep mode, Q&A history |
+| `ui/src/style.css` | Dark theme styles + confidence indicators |
 | `ui/src-tauri/src/lib.rs` | Tauri setup (hotkeys, dialog plugin) |
 
 ## Coding Conventions
@@ -103,8 +106,10 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 - ChatGPT Plus OAuth uses `chatgpt.com/backend-api/codex/responses`, NOT `api.openai.com/v1`
 
 ## Feature Roadmap
-See `memory/FEATURE_PLAN.md` for the full roadmap. Phases G-J cover:
-- G: Manual question override, pre-meeting prep mode, document context & priority
-- H: Session Q&A history, transcript context in synthesis, streaming answers
-- I: Quick-pin answers, URL ingestion, confidence styling
-- J: Post-meeting export, smart question staleness
+See `memory/FEATURE_PLAN.md` for the full roadmap. Phases G-J are complete:
+- ✅ G: Manual question override, pre-meeting prep mode, document context & priority
+- ✅ H: Session Q&A history, transcript context in synthesis, streaming answers
+- ✅ I: Quick-pin answers, URL ingestion, confidence styling
+- ✅ J: Post-meeting export, smart question staleness
+
+Future phases continue in the roadmap document.
