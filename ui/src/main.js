@@ -428,29 +428,9 @@ async function deleteDoc(title) {
     if (!confirm('Delete "' + title + '" from the project?')) return;
 
     try {
-        const data = await sendCommand('delete_doc', { title });
-        dom.docList.innerHTML = '';
-        const docs = data.docs || [];
-        if (docs.length === 0) {
-            const li = document.createElement('li');
-            li.className = 'empty-msg';
-            li.textContent = 'No documents ingested';
-            dom.docList.appendChild(li);
-        } else {
-            for (const t of docs) {
-                const li = document.createElement('li');
-                const span = document.createElement('span');
-                span.className = 'doc-title';
-                span.textContent = t;
-                const btn = document.createElement('button');
-                btn.textContent = 'Delete';
-                btn.className = 'btn-danger';
-                btn.addEventListener('click', () => deleteDoc(t));
-                li.appendChild(span);
-                li.appendChild(btn);
-                dom.docList.appendChild(li);
-            }
-        }
+        await sendCommand('delete_doc', { title });
+        // Server response shape changed (strings -> objects). Re-use the canonical renderer.
+        refreshDocList();
     } catch (err) {
         console.error('[Settings] Delete doc failed:', err);
     }
