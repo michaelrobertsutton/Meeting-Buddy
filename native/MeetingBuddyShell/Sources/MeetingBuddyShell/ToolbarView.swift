@@ -55,7 +55,11 @@ struct ToolbarView: View {
                 .help("Export")
 
                 Button {
-                    // TODO (#122/#125): open native settings UI
+                    do {
+                        try SettingsLauncher.launch()
+                    } catch {
+                        ws.settingsError = error.localizedDescription
+                    }
                 } label: {
                     Image(systemName: "gearshape")
                 }

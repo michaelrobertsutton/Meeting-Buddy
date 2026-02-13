@@ -4,6 +4,7 @@ import Combine
 final class WebSocketClient: ObservableObject {
     @Published var connected: Bool = false
     @Published var lastError: String? = nil
+    @Published var settingsError: String? = nil
 
     @Published var settingsError: String? = nil
 
