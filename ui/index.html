@@ -190,6 +190,38 @@
         <span id="pin-status" class="hidden">PINNED</span>
     </div>
 
+    <!-- Privacy-first onboarding modal -->
+    <div id="onboarding" class="modal hidden" data-tauri-drag-region="false">
+        <div class="modal-card" data-tauri-drag-region="false">
+            <div class="modal-header">
+                <div class="modal-title">Privacy First</div>
+                <div class="modal-subtitle">Meeting Buddy processes audio/transcripts locally. macOS permissions are required to capture system audio and microphone input.</div>
+            </div>
+
+            <div class="perm-row">
+                <div class="perm-icon">🔒</div>
+                <div class="perm-text">
+                    <div class="perm-title">Screen Recording</div>
+                    <div class="perm-desc">Required for ScreenCaptureKit to capture system audio from meetings.</div>
+                </div>
+                <button id="btn-open-screen" class="btn-primary">Open System Settings</button>
+            </div>
+
+            <div class="perm-row">
+                <div class="perm-icon">🎙️</div>
+                <div class="perm-text">
+                    <div class="perm-title">Microphone</div>
+                    <div class="perm-desc">Optional, but recommended if you want mic audio capture.</div>
+                </div>
+                <button id="btn-open-mic" class="btn-primary">Open System Settings</button>
+            </div>
+
+            <div class="modal-actions">
+                <button id="btn-onboarding-done" class="btn-secondary">Done</button>
+            </div>
+        </div>
+    </div>
+
     <script src="src/main.js"></script>
 </body>
 </html>
