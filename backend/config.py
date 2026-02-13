@@ -65,6 +65,7 @@ class ActiveQuestionConfig:
     lookback_window_s: float = 60.0  # How far back to scan for questions
     debounce_interval_s: float = 1.0  # Min time between question changes
     min_confidence: float = 0.3  # Minimum score to surface a question
+    manual_override_timeout_s: float = 90.0  # Auto-resume after manual override
 
 
 @dataclass

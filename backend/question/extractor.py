@@ -49,9 +49,25 @@ class ActiveQuestionExtractor:
         self._question_history: list[dict] = []  # [{text, score, time}]
         self._seen_questions: set[str] = set()  # dedup by normalized text
         self._manual_question: str | None = None  # user-selected override
+        self._manual_set_time: float | None = None
+
+    def _maybe_expire_manual(self) -> None:
+        if self._manual_question is None or self._manual_set_time is None:
+            return
+        try:
+            timeout_s = float(getattr(self._config, "manual_override_timeout_s", 0.0) or 0.0)
+        except Exception:
+            timeout_s = 0.0
+        if timeout_s <= 0:
+            return
+        if (time.monotonic() - self._manual_set_time) >= timeout_s:
+            logger.info("Manual question override expired; resuming auto")
+            self._manual_question = None
+            self._manual_set_time = None
 
     @property
     def current_question(self) -> str | None:
+        self._maybe_expire_manual()
         if self._manual_question is not None:
             return self._manual_question
         return self._current_question
@@ -63,13 +79,25 @@ class ActiveQuestionExtractor:
     def select_question(self, text: str | None) -> None:
         """Manually select a question (or None to resume auto-detection)."""
         self._manual_question = text
+        self._manual_set_time = time.monotonic() if text else None
+
         if text:
+            # Ensure manual entries show up in history too.
+            norm = text.strip().lower()
+            if norm and norm not in self._seen_questions:
+                self._seen_questions.add(norm)
+                self._question_history.append({
+                    "text": text,
+                    "score": 1.0,
+                    "time": time.monotonic(),
+                })
             logger.info("Manual question selected: %s", text)
         else:
             logger.info("Resumed auto question detection")
 
     def update(self) -> str | None:
         """Check for a new active question. Returns current question (may be unchanged)."""
+        self._maybe_expire_manual()
         version = self._buffer.get_version()
         if version == self._last_version:
             return self.current_question
