@@ -379,14 +379,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('[Onboarding] Screen Recording permission status:', hasPermission);
             } catch (err) {
                 console.warn('[Onboarding] Failed to check permission:', err);
-                // If check fails, assume no permission to be safe
-                hasPermission = false;
+                // If we cannot reliably check, don't show the overlay (avoid false positives).
+                return;
             }
-            
+
             // If permission is granted, skip overlay entirely
             if (hasPermission) {
                 console.log('[Onboarding] Permission already granted, skipping overlay');
-                localStorage.setItem('mb_onboarding_done', '1');
+                hideOnboarding();
                 return;
             }
             
@@ -401,8 +401,9 @@ document.addEventListener('DOMContentLoaded', () => {
             showOnboarding();
         } catch (err) {
             console.error('[Onboarding] Error checking permissions:', err);
-            // If anything fails, show onboarding to be safe
-            showOnboarding();
+            // If permission check fails (invoke not available, etc.), do NOT block the user.
+            // They can still open Settings and resolve permissions as needed.
+            return;
         }
     }
     
