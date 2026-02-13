@@ -110,6 +110,20 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 - `macOSPrivateApi` is NOT a valid top-level key in Tauri 2.x config
 - ChatGPT Plus OAuth uses `chatgpt.com/backend-api/codex/responses`, NOT `api.openai.com/v1`
 
+## GitHub issue + PR workflow (required)
+
+**Source of truth:** [CONTRIBUTING.md](CONTRIBUTING.md). When working on a GitHub issue:
+
+1. **Before starting:** Set issue to `status:in-progress` and assign (or add agent label e.g. `agent:claw`).
+2. **One issue per branch:** Use branch name like `feature/119-transcript-engine` or `fix/118-foo`.
+3. **When opening a PR:** Move the issue to `status:review` (remove `status:ready` or `status:in-progress`, add `status:review`). PR title/body should reference and close the issue (e.g. "Closes #119").
+4. **Do not** leave work merged-to-main without a PR; do not leave issues in `status:in-progress` after opening a PR.
+
+```bash
+gh issue edit <N> --remove-label "status:ready" --add-label "status:in-progress"   # when starting
+gh issue edit <N> --remove-label "status:in-progress" --add-label "status:review"   # when PR open
+```
+
 ## Feature Roadmap
 See [docs/roadmap.md](docs/roadmap.md) (and GitHub Issues/labels) for the roadmap and current work queue.
 
