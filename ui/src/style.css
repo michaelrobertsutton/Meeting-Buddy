@@ -5,12 +5,13 @@
     --mb-bg: rgba(20, 20, 25, 0.92);
     --mb-glass: rgba(255, 255, 255, 0.04);
 
-    --mb-border: rgba(255, 255, 255, 0.10);
-    --mb-border-subtle: rgba(255, 255, 255, 0.06);
+    --mb-border: rgba(255, 255, 255, 0.15);
+    --mb-border-subtle: rgba(255, 255, 255, 0.08);
 
-    --mb-text: #e6e6e6;
-    --mb-text-secondary: #a8a8b2;
-    --mb-text-tertiary: #7b7b86;
+    /* High-contrast text hierarchy */
+    --mb-text: rgba(255, 255, 255, 1.0);
+    --mb-text-secondary: rgba(255, 255, 255, 0.70);
+    --mb-text-tertiary: rgba(255, 255, 255, 0.45);
 
     --mb-radius-lg: 12px;
     --mb-radius-md: 8px;
@@ -36,10 +37,10 @@ html, body {
 }
 
 body {
-    /* With macOS vibrancy, prefer a lighter tint so the material shows through */
-    background: color-mix(in srgb, var(--mb-bg) 60%, transparent);
+    /* With macOS vibrancy, keep tint minimal so the material shows through */
+    background: transparent;
     border-radius: var(--mb-radius-lg);
-    border: 0.5px solid var(--mb-border);
+    border: 1px solid var(--mb-border);
     display: flex;
     flex-direction: column;
 }
@@ -247,10 +248,16 @@ body:not(.has-question) .answer-card {
 #bullet-list {
     list-style: disc;
     padding-left: 18px;
-    color: color-mix(in srgb, var(--mb-text) 70%, transparent);
+    color: var(--mb-text);
 }
 
-#bullet-list li { margin-bottom: 6px; }
+#bullet-list li {
+    margin-bottom: 6px;
+}
+
+#bullet-list li::marker {
+    color: var(--mb-accent);
+}
 
 /* --- Question Section --- */
 
@@ -587,7 +594,7 @@ body:not(.has-question) .answer-card {
     font-size: 13px;
     font-weight: 500;
     line-height: 1.45;
-    color: color-mix(in srgb, var(--mb-text) 70%, transparent);
+    color: var(--mb-text);
     padding: 6px 8px;
     background: color-mix(in srgb, rgba(0, 0, 0, 0.22) 60%, transparent);
     border-radius: var(--mb-radius-sm);
@@ -734,12 +741,30 @@ body:not(.has-question) .answer-card {
     border-radius: 2px;
 }
 
+.trust-badge {
+    position: absolute;
+    top: 10px;
+    right: 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid color-mix(in srgb, var(--mb-accent) 30%, transparent);
+    background: color-mix(in srgb, var(--mb-accent) 10%, transparent);
+    color: var(--mb-accent);
+    font-size: 11px;
+    pointer-events: none;
+}
+
+.trust-icon { font-size: 12px; }
+
 #status-bar {
     display: flex;
     justify-content: space-between;
     padding: 4px 12px;
     font-size: 10px;
-    color: #555;
+    color: var(--mb-text-tertiary);
     border-top: 1px solid rgba(255, 255, 255, 0.05);
     flex-shrink: 0;
 }

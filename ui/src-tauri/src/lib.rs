@@ -28,7 +28,8 @@ pub fn run() {
             {
                 if let Some(window) = app.get_webview_window("overlay") {
                     // Glassy background behind the WebView. Border/radius are handled by CSS.
-                    let _ = apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None);
+                    // High-contrast translucent background (UltraThinMaterial Dark-ish)
+                    let _ = apply_vibrancy(&window, NSVisualEffectMaterial::UltraThin, None, None);
                 }
             }
 
