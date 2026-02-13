@@ -64,6 +64,7 @@ The first run downloads the Whisper model (~500MB for `small`) — one-time only
 ```bash
 # Replace with your actual project path
 cd "/path/to/Meeting Buddy" && \
+git checkout main && git pull origin main && \
 source .venv/bin/activate && \
 cd audio-capture && swift build -c release && cd .. && \
 cd ui && npm run tauri build && cd .. && \
@@ -71,9 +72,11 @@ rm -rf "/Applications/Meeting Buddy.app" && \
 cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
 ```
 
-Or if you're already in the project directory:
+Or if you're already in the project directory (or any subdirectory):
 
 ```bash
+cd "$(git rev-parse --show-toplevel)" && \
+git checkout main && git pull origin main && \
 source .venv/bin/activate && \
 cd audio-capture && swift build -c release && cd .. && \
 cd ui && npm run tauri build && cd .. && \
