@@ -47,6 +47,15 @@ class IngestPipeline:
         texts = [c.text for c in chunks]
         embeddings = self._embedder.embed_texts(texts)
 
+        # Auto-populate doc registry (one-line description from first chunk)
+        try:
+            first = chunks[0].text.strip().replace("\n", " ")
+            # Keep it short-ish for settings UI
+            suggested = (first[:220] + "…") if len(first) > 220 else first
+            self._manager.ensure_doc_registry_entry(project_name, doc.title, suggested_description=suggested)
+        except Exception:
+            logger.debug("Failed to update doc registry for %s", doc.title, exc_info=True)
+
         logger.info("Storing chunks")
         store.add_chunks(chunks, embeddings)
 

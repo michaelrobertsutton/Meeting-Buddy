@@ -96,7 +96,14 @@ class SynthesisEngine:
             )
             logger.info("Retrieved %d chunks for synthesis", len(results))
 
-        user_prompt = build_user_prompt(question, results)
+        doc_registry = None
+        if self._retriever and hasattr(self._retriever, "get_doc_registry"):
+            try:
+                doc_registry = self._retriever.get_doc_registry()
+            except Exception:
+                doc_registry = None
+
+        user_prompt = build_user_prompt(question, results, doc_registry=doc_registry)
 
         try:
             if self._oauth_token and self._chatgpt_account_id:

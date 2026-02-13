@@ -605,6 +605,29 @@ body.pinned #drag-handle {
     white-space: nowrap;
 }
 
+#doc-list li .doc-desc {
+    flex: 2;
+    min-width: 160px;
+    margin-left: 8px;
+    margin-right: 8px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e6e6e6;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 4px 6px;
+}
+
+#doc-list li .doc-priority {
+    margin-right: 8px;
+    font-size: 12px;
+    background: rgba(255, 255, 255, 0.06);
+    color: #e6e6e6;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    padding: 4px 6px;
+}
+
 #doc-list li button {
     padding: 2px 6px;
     font-size: 10px;

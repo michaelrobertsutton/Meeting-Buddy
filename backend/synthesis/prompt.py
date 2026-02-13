@@ -47,11 +47,54 @@ def format_chunks(results: list[RetrievalResult]) -> str:
     return "\n\n".join(parts)
 
 
-def build_user_prompt(question: str, results: list[RetrievalResult]) -> str:
+def format_doc_registry(doc_registry: dict, available_titles: set[str]) -> str:
+    """Format a document registry preamble for the prompt."""
+    if not doc_registry:
+        return ""
+
+    lines = ["DOCUMENT REGISTRY (your available knowledge base):"]
+
+    # Only include docs that are actually present in the vector store (or retrieved)
+    items = []
+    for title, meta in doc_registry.items():
+        if title not in available_titles:
+            continue
+        if not isinstance(meta, dict):
+            meta = {}
+        pr = (meta.get("priority") or "normal").upper()
+        desc = (meta.get("description") or "").strip()
+        if desc:
+            items.append((title, pr, desc))
+        else:
+            items.append((title, pr, ""))
+
+    if not items:
+        return ""
+
+    for i, (title, pr, desc) in enumerate(items, 1):
+        if desc:
+            lines.append(f"{i}. [{pr}] \"{title}\" — {desc}")
+        else:
+            lines.append(f"{i}. [{pr}] \"{title}\"")
+
+    lines.append("")
+    lines.append("Prefer HIGH priority documents when sources conflict.")
+    return "\n".join(lines).strip() + "\n\n"
+
+
+def build_user_prompt(
+    question: str,
+    results: list[RetrievalResult],
+    doc_registry: dict | None = None,
+) -> str:
     """Assemble the full user prompt with question and context."""
     chunks_text = format_chunks(results)
+    titles = {r.doc_title for r in results}
+    registry_text = format_doc_registry(doc_registry or {}, titles)
+
     return (
         f"ACTIVE QUESTION: {question}\n\n"
+        f"{registry_text}"
         f"SOURCE DOCUMENTS:\n{chunks_text}\n\n"
         "Provide your answer as JSON."
     )
