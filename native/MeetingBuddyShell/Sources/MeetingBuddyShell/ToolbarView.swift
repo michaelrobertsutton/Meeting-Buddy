@@ -5,6 +5,8 @@ struct ToolbarView: View {
 
     @State private var query: String = ""
 
+    @State private var lastProjectSelection: String = ""
+
     var body: some View {
         HStack(spacing: 12) {
             // Left: App name + project picker
@@ -24,6 +26,14 @@ struct ToolbarView: View {
                 .pickerStyle(.menu)
                 .font(.caption)
                 .foregroundStyle(.secondary)
+                .onAppear {
+                    lastProjectSelection = ws.activeProject
+                }
+                .onChange(of: ws.activeProject) { newValue in
+                    guard newValue != lastProjectSelection else { return }
+                    lastProjectSelection = newValue
+                    Task { await ws.switchProject(name: newValue) }
+                }
             }
 
             Spacer(minLength: 0)
@@ -45,7 +55,7 @@ struct ToolbarView: View {
                 .help("Export")
 
                 Button {
-                    // TODO: open settings window (native)
+                    // TODO (#122/#125): open native settings UI
                 } label: {
                     Image(systemName: "gearshape")
                 }
