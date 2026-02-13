@@ -6,12 +6,24 @@ All audio and transcript data stays on your device. Only the active question + r
 
 ## Features
 
+### Core Capabilities
 - **Real-time transcription** — faster-whisper with Silero VAD, streaming to overlay
 - **Active question inference** — heuristic extraction from rolling transcript buffer
-- **Document RAG** — ingest PDF/DOCX/MD/HTML, embed with all-MiniLM-L6-v2, search via LanceDB
+- **Document RAG** — ingest PDF/DOCX/MD/HTML/URLs, embed with all-MiniLM-L6-v2, search via LanceDB
 - **Bullet synthesis** — GPT-4o-mini generates evidence-backed talking points with citations
+- **Streaming answers** — see answers appear in real-time as they're generated
+- **Confidence indicators** — color-coded borders (green/yellow/red) and low-confidence warnings
+
+### Meeting Features
+- **Manual question override** — type questions directly in the quick question input
+- **Pre-meeting prep mode** — generate and answer questions before meetings start
+- **Q&A history** — browse past questions and answers from the current session
+- **Session export** — export transcripts and Q&A history as Markdown or JSON
+
+### UI & Controls
 - **Always-on-top overlay** — Tauri window with dark theme, hotkeys, pin/unpin
-- **Settings panel** — manage API key, projects, and document ingestion from the UI (no terminal needed)
+- **Settings panel** — manage API key (or OAuth), projects, and document ingestion from the UI
+- **Question history** — ranked list of detected questions with staleness indicators
 
 ## Prerequisites
 
@@ -58,9 +70,29 @@ cd ui && npm run tauri dev
 ```
 
 Click the gear icon in the overlay to:
-1. **Set your OpenAI API key** (required for synthesis)
+1. **Set your OpenAI API key** (or use OAuth with ChatGPT Plus) — required for synthesis
 2. **Create a project** and switch to it
-3. **Add documents** via file picker — ingestion runs in the background with progress
+3. **Add documents**:
+   - Use **Add Files** or **Add Folder** for local documents (PDF, DOCX, MD, HTML)
+   - Paste a **URL** in the URL input field and click **Add URL** to ingest web content
+   - Ingestion runs in the background with progress indicators
+
+### Using the Overlay
+
+**During meetings:**
+- The overlay automatically detects questions from the transcript and generates answers
+- Use the **quick question input** (top bar) to manually ask questions
+- Click **"Auto"** to resume automatic question detection
+- View **Q&A History** to see past questions and answers
+- Answers show **confidence indicators**: green border (high), yellow (medium), red (low)
+
+**Before meetings (Prep Mode):**
+- Click **"Prep Mode"** in settings to generate prep questions
+- Add custom prep questions and get answers immediately
+- Switch back to meeting mode when ready
+
+**After meetings:**
+- Use **Export Session** to save transcript and Q&A history as Markdown or JSON
 
 ### CLI fallback (power users)
 
@@ -74,6 +106,7 @@ OPENAI_API_KEY=sk-... python -m backend.main --project "my-project"
 # Ingest documents via CLI
 python -m ingest create-project --name "my-project"
 python -m ingest ingest --project "my-project" --path /path/to/docs/
+python -m ingest ingest --project "my-project" --path https://example.com/article  # URLs work too!
 python -m ingest list-docs --project "my-project"
 ```
 
@@ -110,6 +143,12 @@ Settings like API key and active project persist in `~/.meeting-buddy/config.jso
 **Synthesis not working**
 - Check that an OpenAI API key is configured (Settings panel or `OPENAI_API_KEY` env var)
 - Check that a project is selected and has ingested documents
+- For OAuth mode: ensure you've logged in via the Settings panel
+
+**URL ingestion failing**
+- Check your internet connection
+- Some sites may block automated requests — try a different URL
+- Check backend logs for HTTP error codes
 
 ## Project Structure
 
@@ -131,15 +170,28 @@ Meeting Buddy/
 │   ├── question/
 │   │   └── extractor.py     # Active question inference
 │   ├── synthesis/
-│   │   ├── engine.py        # OpenAI synthesis (GPT-4o-mini)
-│   │   └── prompt.py        # System/user prompts
+│   │   ├── engine.py        # OpenAI synthesis (GPT-4o-mini, streaming)
+│   │   ├── prompt.py        # System/user prompts
+│   │   └── prep.py          # Pre-meeting prep question generation
+│   ├── auth/
+│   │   ├── oauth.py         # OpenAI OAuth token management
+│   │   └── login_server.py  # OAuth callback server
+│   ├── export/
+│   │   └── renderer.py      # Session export (Markdown/JSON)
 │   └── server/
 │       └── websocket.py     # Bidirectional WebSocket server
 ├── audio-capture/
 │   └── Sources/AudioCapture/main.swift  # Swift SCK helper
 ├── ingest/
 │   ├── config.py            # Ingest configuration
-│   ├── parsers/             # PDF, DOCX, MD, HTML parsers
+│   ├── parsers/             # PDF, DOCX, MD, HTML, URL parsers
+│   │   ├── base.py          # Parser protocol
+│   │   ├── pdf_parser.py
+│   │   ├── docx_parser.py
+│   │   ├── markdown_parser.py
+│   │   ├── html_parser.py
+│   │   ├── url_parser.py    # Web URL fetching & parsing
+│   │   └── registry.py     # Parser selection
 │   ├── chunker.py           # Text chunking
 │   ├── embedder.py          # Sentence-transformer embeddings
 │   ├── store.py             # LanceDB vector store
@@ -148,10 +200,10 @@ Meeting Buddy/
 │   ├── project_manager.py   # Project CRUD
 │   └── __main__.py          # CLI entry point
 └── ui/
-    ├── index.html           # Overlay HTML (+ settings drawer)
+    ├── index.html           # Overlay HTML (+ settings drawer, Q&A history, prep mode)
     ├── src/
-    │   ├── main.js          # WebSocket client, settings, file picker
-    │   └── style.css        # Dark theme styles
+    │   ├── main.js          # WebSocket client, settings, file picker, prep mode
+    │   └── style.css        # Dark theme styles + confidence indicators
     └── src-tauri/
         ├── src/lib.rs        # Tauri setup (hotkeys, dialog plugin)
         └── tauri.conf.json   # Window config (always-on-top, transparent)
