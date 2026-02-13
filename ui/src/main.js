@@ -944,8 +944,8 @@ function toggleQuestionHistory() {
 
 function renderQuestionHistory() {
     dom.questionHistoryList.innerHTML = '';
-    // Show newest first
-    const items = [...state.questionHistory].reverse();
+    // Show ranked questions (already sorted by score from backend, top-N)
+    const items = state.questionHistory || [];
     if (items.length === 0) {
         const li = document.createElement('li');
         li.textContent = 'No questions detected yet';
@@ -957,10 +957,31 @@ function renderQuestionHistory() {
     }
     for (const q of items) {
         const li = document.createElement('li');
-        li.textContent = q.text;
+        
+        // Add rank indicator (1, 2, 3...)
+        const rankSpan = document.createElement('span');
+        rankSpan.className = 'qh-rank';
+        rankSpan.textContent = (items.indexOf(q) + 1) + '.';
+        li.appendChild(rankSpan);
+        
+        const textSpan = document.createElement('span');
+        textSpan.textContent = q.text;
         if (q.text === state.activeQuestion) {
             li.classList.add('selected');
         }
+        if (q.stale) {
+            li.classList.add('stale');
+        }
+        li.appendChild(textSpan);
+        
+        // Show score if available
+        if (q.score != null) {
+            const scoreSpan = document.createElement('span');
+            scoreSpan.className = 'qh-score';
+            scoreSpan.textContent = q.score.toFixed(1);
+            li.appendChild(scoreSpan);
+        }
+        
         li.addEventListener('click', () => selectQuestion(q.text));
         dom.questionHistoryList.appendChild(li);
     }

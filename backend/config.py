@@ -66,6 +66,8 @@ class ActiveQuestionConfig:
     debounce_interval_s: float = 1.0  # Min time between question changes
     min_confidence: float = 0.3  # Minimum score to surface a question
     manual_override_timeout_s: float = 90.0  # Auto-resume after manual override
+    question_staleness_s: float = 30.0  # Questions older than this are considered stale
+    track_top_n: int = 3  # Track top N questions, not just the best one
 
 
 @dataclass

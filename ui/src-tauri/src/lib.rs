@@ -14,16 +14,14 @@ fn get_backend_url() -> String {
 pub fn run() {
     let app = tauri::Builder::default()
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .build(),
+            )?;
 
             // --- Spawn the Python backend sidecar ---
-            match app.shell().sidecar("binaries/meeting-buddy-backend") {
+            match app.shell().sidecar("meeting-buddy-backend") {
                 Ok(command) => match command.spawn() {
                     Ok((mut rx, child)) => {
                         log::info!("Backend sidecar spawned");
@@ -56,14 +54,14 @@ pub fn run() {
                         });
                     }
                     Err(e) => {
-                        log::warn!("Failed to spawn backend sidecar: {e}");
-                        log::warn!("Run the backend manually: python -m backend.main");
+                        log::warn!("[meeting-buddy] Failed to spawn backend sidecar: {e}");
+                        log::warn!("[meeting-buddy] Run the backend manually: python -m backend.main");
                         app.manage(BackendChild(Mutex::new(None)));
                     }
                 },
                 Err(e) => {
-                    log::warn!("Backend sidecar not found: {e}");
-                    log::warn!("Run the backend manually: python -m backend.main");
+                    log::warn!("[meeting-buddy] Backend sidecar not found: {e}");
+                    log::warn!("[meeting-buddy] Run the backend manually: python -m backend.main");
                     app.manage(BackendChild(Mutex::new(None)));
                 }
             }

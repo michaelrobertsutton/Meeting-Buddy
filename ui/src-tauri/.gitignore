@@ -4,4 +4,4 @@
 /gen/schemas
 
 # Sidecar binaries — AudioCapture is a compiled binary (rebuild with swift build)
-/binaries/AudioCapture-*
+/AudioCapture-*

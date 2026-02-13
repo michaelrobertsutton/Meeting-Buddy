@@ -74,7 +74,27 @@ class ActiveQuestionExtractor:
 
     @property
     def question_history(self) -> list[dict]:
-        return list(self._question_history)
+        """Return question history with staleness flags and ranked by score."""
+        now = time.monotonic()
+        staleness_threshold = self._config.question_staleness_s
+        
+        # Annotate questions with staleness
+        annotated = []
+        for q in self._question_history:
+            age = now - q.get("time", 0)
+            is_stale = age > staleness_threshold
+            annotated.append({
+                **q,
+                "stale": is_stale,
+                "age": age,
+            })
+        
+        # Sort by score (descending), then by recency (newer first for ties)
+        annotated.sort(key=lambda x: (-x.get("score", 0), -x.get("time", 0)))
+        
+        # Return top N questions
+        top_n = self._config.track_top_n
+        return annotated[:top_n] if top_n > 0 else annotated
 
     def select_question(self, text: str | None) -> None:
         """Manually select a question (or None to resume auto-detection)."""
@@ -120,6 +140,7 @@ class ActiveQuestionExtractor:
             return self.current_question
 
         # Add ALL qualifying questions to history (not just the best)
+        current_time = time.monotonic()
         for text, score in scored:
             norm = text.strip().lower()
             if norm not in self._seen_questions:
@@ -127,11 +148,12 @@ class ActiveQuestionExtractor:
                 self._question_history.append({
                     "text": text,
                     "score": round(score, 2),
-                    "time": time.monotonic(),
+                    "time": current_time,
                 })
                 logger.info("New question detected: %s (score=%.2f)", text, score)
 
-        # Pick the best for auto-detection
+        # Pick the best question for auto-detection
+        # (Staleness filtering happens in question_history property)
         best_text, best_score = max(scored, key=lambda x: x[1])
 
         if best_score < self._config.min_confidence:
