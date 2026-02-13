@@ -213,7 +213,10 @@ pub fn run() {
                             } else if shortcut == &dismiss_onboarding_shortcut {
                                 // Escape key - dismiss onboarding overlay
                                 if let Some(window) = app_handle.get_webview_window("overlay") {
-                                    let _ = window.eval("if(window.__hideOnboarding) window.__hideOnboarding();");
+                                    // Try multiple methods to ensure it works
+                                    let _ = window.eval("if(window.__hideOnboarding) { window.__hideOnboarding(); } else if(window.__disableOnboarding) { window.__disableOnboarding(); }");
+                                    // Also try direct DOM manipulation as fallback
+                                    let _ = window.eval("const el = document.getElementById('onboarding'); if(el) el.classList.add('hidden');");
                                 }
                             }
                         })
