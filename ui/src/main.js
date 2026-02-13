@@ -329,37 +329,46 @@ document.addEventListener('DOMContentLoaded', () => {
     // Check permissions and show onboarding if needed
     async function checkAndShowOnboarding() {
         try {
-            // Check if user has already dismissed onboarding
-            if (localStorage.getItem('mb_onboarding_done')) {
+            // Check Screen Recording permission first
+            let hasPermission = false;
+            try {
+                const { invoke } = window.__TAURI__.core;
+                hasPermission = await invoke('check_screen_recording_permission');
+                console.log('[Onboarding] Screen Recording permission status:', hasPermission);
+            } catch (err) {
+                console.warn('[Onboarding] Failed to check permission:', err);
+                // If check fails, assume no permission to be safe
+                hasPermission = false;
+            }
+            
+            // If permission is granted, skip overlay entirely
+            if (hasPermission) {
+                console.log('[Onboarding] Permission already granted, skipping overlay');
+                localStorage.setItem('mb_onboarding_done', '1');
                 return;
             }
             
-            // Check Screen Recording permission
-            try {
-                const { invoke } = window.__TAURI__.core;
-                const hasPermission = await invoke('check_screen_recording_permission');
-                console.log('[Onboarding] Screen Recording permission status:', hasPermission);
-                
-                // Only show overlay if permission is not granted
-                if (!hasPermission) {
-                    showOnboarding();
-                } else {
-                    // Permission granted, mark as done
-                    localStorage.setItem('mb_onboarding_done', '1');
-                }
-            } catch (err) {
-                console.warn('[Onboarding] Failed to check permission, showing overlay:', err);
-                // If check fails, show overlay to be safe
-                showOnboarding();
+            // Check if user has manually dismissed onboarding before
+            // Only respect this if permission is still missing
+            if (localStorage.getItem('mb_onboarding_done')) {
+                console.log('[Onboarding] User previously dismissed, but permission still missing - showing again');
             }
-        } catch (_) {
-            // If anything fails, show onboarding
+            
+            // Permission not granted, show overlay
+            console.log('[Onboarding] Showing overlay - permission not granted');
+            showOnboarding();
+        } catch (err) {
+            console.error('[Onboarding] Error checking permissions:', err);
+            // If anything fails, show onboarding to be safe
             showOnboarding();
         }
     }
     
-    // Check permissions on startup
-    checkAndShowOnboarding();
+    // Check permissions on startup (after DOM is ready)
+    // Delay slightly to ensure Tauri APIs are available
+    setTimeout(() => {
+        checkAndShowOnboarding();
+    }, 100);
 
     connectWebSocket();
 });
