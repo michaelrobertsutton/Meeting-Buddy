@@ -636,17 +636,18 @@ body:not(.has-question):not(.has-answer-content) #answer {
     border: 1px solid var(--mb-border);
     border-radius: var(--mb-radius-sm);
 
-    /* Reduced gradient for better readability - only subtle fade at very top */
-    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.9) 8%, black 15%, black 100%);
-    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.9) 8%, black 15%, black 100%);
+    /* Top ~20% gradient: older text at top dissolves into glass */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, black 20%, black 100%);
 }
 
 #transcript-quiet {
     display: flex;
     align-items: center;
     gap: 8px;
-    color: var(--mb-text-tertiary);
-    font-size: 13px;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 11px;
+    font-weight: 500;
     padding: 8px 6px;
 }
 
@@ -654,8 +655,7 @@ body:not(.has-question):not(.has-answer-content) #answer {
     width: 8px;
     height: 8px;
     border-radius: 999px;
-    background: var(--mb-accent);
-    opacity: 0.75;
+    background: #60B6F2;
     animation: mbPulse 1.4s ease-in-out infinite;
 }
 
@@ -788,8 +788,13 @@ body:not(.has-question):not(.has-answer-content) #answer {
 }
 
 .transcript-line {
-    transition: opacity 220ms ease;
+    color: rgba(255, 255, 255, 0.6);
+    transition: color 220ms ease;
     word-break: break-word;
+}
+
+.transcript-line.transcript-line-focus {
+    color: #FFFFFF;
 }
 
 #transcript-scroll::-webkit-scrollbar {
