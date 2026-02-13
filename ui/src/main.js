@@ -269,7 +269,11 @@ function toggleSettings() {
     if (state.settingsOpen) {
         // Ensure backend status is immediately accurate
         setConnectionStatus(state.connected ? 'connected' : 'disconnected');
-        loadSettings();
+        // Load settings asynchronously - don't block UI if backend isn't connected
+        loadSettings().catch(err => {
+            console.error('[Settings] Failed to load settings:', err);
+            // Still show the settings panel even if loading fails
+        });
     }
 }
 
@@ -305,6 +309,12 @@ async function exportSession() {
 
 async function loadSettings() {
     try {
+        // Don't block if backend isn't connected - show settings panel anyway
+        if (!state.connected) {
+            console.warn('[Settings] Backend not connected, skipping load');
+            return;
+        }
+        
         const data = await sendCommand('get_settings');
         // API key status
         if (data.has_api_key) {
@@ -339,6 +349,7 @@ async function loadSettings() {
         refreshPrep();
     } catch (err) {
         console.error('[Settings] Load failed:', err);
+        // Don't prevent settings panel from showing if load fails
     }
 }
 
