@@ -155,6 +155,8 @@ def main() -> None:
         ingest_config=ingest_config,
         token_manager=token_manager,
     )
+    # Store capture reference for diagnostics
+    ws_server._capture = capture
 
     # --- Start pipeline ---
     capture.start()
