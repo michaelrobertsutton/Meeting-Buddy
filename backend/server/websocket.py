@@ -876,6 +876,7 @@ class TranscriptWebSocket:
         segments = self.buffer.get_segments()
         msg = {
             "type": msg_type,
+            "protocol_version": 1,
             "segments": [seg.to_dict() for seg in segments],
             "version": self.buffer.get_version(),
         }
