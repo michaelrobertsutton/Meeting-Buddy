@@ -129,6 +129,7 @@ class TranscriptWebSocket:
             "get_pinned": self._cmd_get_pinned,
             "export_session": self._cmd_export_session,
             "get_audio_status": self._cmd_get_audio_status,
+            "get_status": self._cmd_get_status,
         }
 
         handler = handlers.get(cmd)
@@ -177,6 +178,22 @@ class TranscriptWebSocket:
         if self._project_manager:
             data["projects"] = self._project_manager.list_projects()
         return data
+
+    async def _cmd_get_status(self, params: dict) -> dict:
+        """Return lightweight backend status for clients."""
+        active_project = ""
+        if self._settings_manager:
+            active_project = self._settings_manager.get_active_project() or ""
+
+        return {
+            "protocol_version": 1,
+            "backend": {
+                "name": "meeting-buddy-backend",
+                "started_at": self._session_start,
+                "uptime_s": round(time.time() - self._session_start, 3),
+            },
+            "active_project": active_project,
+        }
 
     async def _cmd_set_api_key(self, params: dict) -> dict:
         key = params.get("key", "").strip()
