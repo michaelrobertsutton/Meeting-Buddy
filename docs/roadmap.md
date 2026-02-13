@@ -12,5 +12,5 @@ This repo uses GitHub Issues/labels as the source of truth.
   - `phase-UI`, `phase-G/H/I/J`
   - `area:ui | area:backend | area:ingest`
 
-## What’s next
+## What's next
 - Check the issue list filtered by `status:ready`.
