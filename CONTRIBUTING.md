@@ -46,6 +46,12 @@ The `main` branch is protected to ensure code quality and prevent accidental cha
   4. Create a PR: `gh pr create --base main --head feature/my-feature`
   5. Get review and merge via GitHub
 
+**Setting up the pre-push hook** (first-time setup):
+```bash
+cp git-hooks/pre-push .git/hooks/pre-push
+chmod +x .git/hooks/pre-push
+```
+
 **Note**: Full GitHub branch protection (status checks, required reviews) requires GitHub Pro for private repos. The pre-push hook provides basic protection for all contributors.
 
 To bypass the hook in emergencies (not recommended):
