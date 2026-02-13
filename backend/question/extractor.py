@@ -120,24 +120,34 @@ class ActiveQuestionExtractor:
         self._maybe_expire_manual()
         version = self._buffer.get_version()
         if version == self._last_version:
+            logger.debug("[QuestionExtractor] No transcript version change (version=%d)", version)
             return self.current_question
         self._last_version = version
+        logger.debug("[QuestionExtractor] Transcript version changed to %d", version)
 
         segments = self._buffer.get_segments()
         if not segments:
+            logger.debug("[QuestionExtractor] No transcript segments available")
             return self.current_question
+        logger.debug("[QuestionExtractor] Processing %d transcript segments", len(segments))
 
         # Filter to lookback window
         now = segments[-1].end_time
         cutoff = now - self._config.lookback_window_s
         recent = [s for s in segments if s.end_time >= cutoff]
         if not recent:
+            logger.debug("[QuestionExtractor] No segments in lookback window (cutoff=%.1f, now=%.1f, window=%.1f)", 
+                        cutoff, now, self._config.lookback_window_s)
             return self.current_question
+        logger.debug("[QuestionExtractor] Found %d segments in lookback window (last segment: %.1fs)", 
+                     len(recent), recent[-1].end_time if recent else 0)
 
         # Split into sentences with timing info
         scored = self._score_sentences(recent)
         if not scored:
+            logger.debug("[QuestionExtractor] No scored sentences found after processing segments")
             return self.current_question
+        logger.debug("[QuestionExtractor] Scored %d sentences", len(scored))
 
         # Add ALL qualifying questions to history (not just the best)
         current_time = time.monotonic()
@@ -150,24 +160,32 @@ class ActiveQuestionExtractor:
                     "score": round(score, 2),
                     "time": current_time,
                 })
-                logger.info("New question detected: %s (score=%.2f)", text, score)
+                logger.info("[QuestionExtractor] New question detected: %s (score=%.2f)", text, score)
 
         # Pick the best question for auto-detection
         # (Staleness filtering happens in question_history property)
         best_text, best_score = max(scored, key=lambda x: x[1])
+        logger.debug("[QuestionExtractor] Best question: '%s' (score=%.2f, min_confidence=%.2f)", 
+                    best_text, best_score, self._config.min_confidence)
 
         if best_score < self._config.min_confidence:
+            logger.debug("[QuestionExtractor] Best score %.2f below min_confidence %.2f, keeping current question", 
+                        best_score, self._config.min_confidence)
             return self.current_question
 
         # Debounce: don't change question too frequently
         if best_text != self._current_question:
             elapsed = time.monotonic() - self._last_change_time
             if elapsed < self._config.debounce_interval_s:
+                logger.debug("[QuestionExtractor] Debouncing: %.2fs since last change (min=%.2fs), keeping current", 
+                            elapsed, self._config.debounce_interval_s)
                 return self.current_question
 
             self._current_question = best_text
             self._last_change_time = time.monotonic()
-            logger.info("Active question: %s", best_text)
+            logger.info("[QuestionExtractor] Active question changed to: %s (score=%.2f)", best_text, best_score)
+        else:
+            logger.debug("[QuestionExtractor] Best question unchanged: %s", best_text)
 
         return self.current_question
 
@@ -188,17 +206,24 @@ class ActiveQuestionExtractor:
                 sentences.append((part, position))
 
         if not sentences:
+            logger.debug("[QuestionExtractor] No sentences extracted from segments")
             return []
+
+        logger.debug("[QuestionExtractor] Extracted %d sentences from %d segments", len(sentences), total)
 
         scored: list[tuple[str, float]] = []
         for text, position in sentences:
-            score = self._score_sentence(text)
-            if score <= 0:
+            base_score = self._score_sentence(text)
+            if base_score <= 0:
+                logger.debug("[QuestionExtractor] Sentence scored 0: '%s'", text[:50])
                 continue
             # Apply recency bias: sentences later in the window score higher
-            score *= 0.5 + 0.5 * position
+            score = base_score * (0.5 + 0.5 * position)
             scored.append((text, score))
+            logger.debug("[QuestionExtractor] Sentence scored %.2f (base=%.2f, position=%.2f): '%s'", 
+                        score, base_score, position, text[:50])
 
+        logger.debug("[QuestionExtractor] %d sentences scored above 0 (out of %d)", len(scored), len(sentences))
         return scored
 
     @staticmethod
