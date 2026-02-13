@@ -648,6 +648,9 @@ body:not(.has-question) .answer-card {
     backdrop-filter: blur(12px);
     padding: 20px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    pointer-events: auto;
+    position: relative;
+    z-index: 1000;
 }
 
 .modal-title {
@@ -714,10 +717,31 @@ body:not(.has-question) .answer-card {
     font-size: 12px;
     font-weight: 700;
     cursor: pointer;
+    pointer-events: auto !important;
+    z-index: 1001;
+    position: relative;
 }
 
 .btn-primary:hover {
     filter: brightness(1.05);
+}
+
+.btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--mb-text);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: var(--mb-radius-md);
+    padding: 6px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    pointer-events: auto !important;
+    z-index: 1001;
+    position: relative;
+}
+
+.btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.15);
 }
 
 #transcript-content {
