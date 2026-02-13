@@ -667,6 +667,40 @@ body.pinned #drag-handle {
     padding: 4px 0;
 }
 
+/* Prep mode */
+#prep-list {
+    list-style: none;
+    padding: 0;
+    margin-top: 8px;
+}
+
+#prep-list li {
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+#prep-list .prep-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+#prep-list .prep-q {
+    color: #e6e6e6;
+    font-size: 12px;
+}
+
+#prep-list .prep-a {
+    color: #888;
+    font-size: 11px;
+}
+
+#prep-list button {
+    align-self: flex-start;
+    font-size: 11px;
+    padding: 4px 8px;
+}
+
 /* --- OAuth Login --- */
 
 .btn-login {

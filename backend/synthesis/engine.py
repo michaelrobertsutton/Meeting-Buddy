@@ -86,7 +86,44 @@ class SynthesisEngine:
             return None
 
         self._last_question = question
+        result = await self._synthesize_uncached(question)
+        self._last_result = result
+        return result
 
+    async def synthesize_batch(self, questions: list[str]) -> dict[str, SynthesisResult]:
+        """Synthesize a batch of questions (no last-question caching)."""
+        out: dict[str, SynthesisResult] = {}
+        for q in questions:
+            qq = (q or "").strip()
+            if not qq:
+                continue
+            out[qq] = await self.synthesize_once(qq)
+        return out
+
+    async def synthesize_once(self, question: str) -> SynthesisResult:
+        """Synthesize without last-question caching (useful for prep mode)."""
+        return await self._synthesize_uncached(question)
+
+    async def simple_json_call(
+        self,
+        system_instructions: str,
+        user_prompt: str,
+        max_tokens: int = 800,
+        temperature: float | None = None,
+    ) -> str:
+        """Run a lightweight JSON-only call (used for prep question generation, etc.)."""
+        if self._oauth_token and self._chatgpt_account_id:
+            return await self._call_chatgpt_backend_custom(
+                system_instructions, user_prompt, max_tokens=max_tokens
+            )
+        return await self._call_openai_api_custom(
+            system_instructions,
+            user_prompt,
+            max_tokens=max_tokens,
+            temperature=temperature if temperature is not None else self._config.temperature,
+        )
+
+    async def _synthesize_uncached(self, question: str) -> SynthesisResult:
         # Retrieve context chunks
         results = []
         if self._retriever:
@@ -130,7 +167,6 @@ class SynthesisEngine:
                     if c.get("doc") in valid_titles
                 ]
 
-            self._last_result = result
             logger.info(
                 "Synthesis complete: %d bullets, confidence=%.2f",
                 len(result.bullets), result.confidence,
@@ -139,17 +175,31 @@ class SynthesisEngine:
 
         except Exception:
             logger.exception("Synthesis failed")
-            return None
+            return SynthesisResult(one_liner="", bullets=[], confidence=0.0)
 
     async def _call_openai_api(self, user_prompt: str) -> str:
         """Standard OpenAI API call (platform billing)."""
+        return await self._call_openai_api_custom(
+            SYSTEM_PROMPT,
+            user_prompt,
+            max_tokens=self._config.max_tokens,
+            temperature=self._config.temperature,
+        )
+
+    async def _call_openai_api_custom(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+        temperature: float,
+    ) -> str:
         response = await self._client.chat.completions.create(
             model=self._config.model,
-            temperature=self._config.temperature,
-            max_tokens=self._config.max_tokens,
+            temperature=temperature,
+            max_tokens=max_tokens,
             response_format={"type": "json_object"},
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
         )
@@ -157,6 +207,18 @@ class SynthesisEngine:
 
     async def _call_chatgpt_backend(self, user_prompt: str) -> str:
         """ChatGPT backend call via SSE streaming (uses Plus/Pro subscription quota)."""
+        return await self._call_chatgpt_backend_custom(
+            SYSTEM_PROMPT,
+            user_prompt,
+            max_tokens=self._config.max_tokens,
+        )
+
+    async def _call_chatgpt_backend_custom(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        max_tokens: int,
+    ) -> str:
         headers = {
             "Authorization": f"Bearer {self._oauth_token}",
             "Content-Type": "application/json",
@@ -167,7 +229,7 @@ class SynthesisEngine:
         # Codex backend only supports: model, instructions, input, stream, store
         payload = {
             "model": self._oauth_model,
-            "instructions": SYSTEM_PROMPT,
+            "instructions": system_prompt,
             "input": [
                 {"role": "user", "content": user_prompt},
             ],
