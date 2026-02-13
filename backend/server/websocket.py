@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from pathlib import Path
 
 import websockets
@@ -44,6 +45,8 @@ class TranscriptWebSocket:
         self._active_answer: dict | None = None
         self._synthesis_in_flight: bool = False
         self._ingestion_in_progress: bool = False
+        self._qa_history: list[dict] = []
+        self._session_start: float = time.time()
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -110,6 +113,7 @@ class TranscriptWebSocket:
             "login_status": self._cmd_login_status,
             "logout": self._cmd_logout,
             "select_question": self._cmd_select_question,
+            "export_session": self._cmd_export_session,
         }
 
         handler = handlers.get(cmd)
@@ -420,6 +424,54 @@ class TranscriptWebSocket:
             asyncio.create_task(self._run_synthesis(text))
         return {"selected": text}
 
+    async def _cmd_export_session(self, params: dict) -> dict:
+        """Export session data as markdown or JSON."""
+        from backend.export.renderer import SessionData, render_json, render_markdown
+
+        fmt = params.get("format", "markdown")
+        if fmt not in ("markdown", "json"):
+            raise ValueError(f"Unsupported format: {fmt}")
+
+        save_path = params.get("path", "")
+
+        # Collect session data
+        segments = self.buffer.get_segments()
+        project_name = ""
+        if self._settings_manager:
+            project_name = self._settings_manager.get_active_project() or ""
+
+        session = SessionData(
+            transcript_segments=[seg.to_dict() for seg in segments],
+            qa_history=self._qa_history,
+            project_name=project_name,
+            session_start=self._session_start,
+            session_end=time.time(),
+        )
+
+        if fmt == "markdown":
+            content = render_markdown(session)
+            ext = ".md"
+        else:
+            content = render_json(session)
+            ext = ".json"
+
+        # Determine output path
+        if save_path:
+            out = Path(save_path)
+        else:
+            export_dir = Path("~/.meeting-buddy/exports").expanduser()
+            export_dir.mkdir(parents=True, exist_ok=True)
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"session_{timestamp}{ext}"
+            out = export_dir / filename
+
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(content, encoding="utf-8")
+        logger.info("Session exported to %s", out)
+
+        return {"path": str(out), "format": fmt}
+
     # --- Background ingestion ---
 
     async def _run_ingestion(self, project_name: str, paths: list[str]) -> None:
@@ -570,6 +622,11 @@ class TranscriptWebSocket:
             result = await self._synthesis_engine.synthesize(question)
             if result is not None:
                 self._active_answer = result.to_dict()
+                self._qa_history.append({
+                    "question": question,
+                    "answer": self._active_answer,
+                    "timestamp": time.time(),
+                })
                 await self._broadcast_answer()
         except Exception:
             logger.exception("Synthesis task failed")

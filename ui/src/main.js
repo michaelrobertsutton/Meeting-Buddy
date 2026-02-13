@@ -106,7 +106,11 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.btnLogout = document.getElementById('btn-logout');
     dom.apiKeyFallback = document.getElementById('api-key-fallback');
 
+    // Export button
+    dom.btnExport = document.getElementById('btn-export');
+
     // Event listeners
+    dom.btnExport.addEventListener('click', exportSession);
     dom.btnPin.addEventListener('click', togglePin);
     dom.btnClose.addEventListener('click', () => {
         const { getCurrentWindow } = window.__TAURI__.window;
@@ -178,6 +182,36 @@ function toggleSettings() {
 
     if (state.settingsOpen) {
         loadSettings();
+    }
+}
+
+async function exportSession() {
+    try {
+        const { save } = window.__TAURI__.dialog;
+        const savePath = await save({
+            defaultPath: 'meeting-export.md',
+            filters: [
+                { name: 'Markdown', extensions: ['md'] },
+                { name: 'JSON', extensions: ['json'] },
+            ],
+        });
+        if (!savePath) return; // user cancelled
+
+        const fmt = savePath.endsWith('.json') ? 'json' : 'markdown';
+        await sendCommand('export_session', { format: fmt, path: savePath });
+
+        // Brief feedback
+        const origText = dom.btnExport.textContent;
+        dom.btnExport.textContent = 'Exported!';
+        dom.btnExport.classList.add('active');
+        setTimeout(() => {
+            dom.btnExport.textContent = origText;
+            dom.btnExport.classList.remove('active');
+        }, 2000);
+    } catch (err) {
+        console.error('[Export] Failed:', err);
+        dom.btnExport.textContent = 'Error';
+        setTimeout(() => { dom.btnExport.textContent = 'Export'; }, 2000);
     }
 }
 
