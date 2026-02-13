@@ -104,6 +104,8 @@ class TranscriptWebSocket:
             "list_docs": self._cmd_list_docs,
             "ingest_files": self._cmd_ingest_files,
             "delete_doc": self._cmd_delete_doc,
+            "get_doc_meta": self._cmd_get_doc_meta,
+            "update_doc_meta": self._cmd_update_doc_meta,
             "start_login": self._cmd_start_login,
             "login_status": self._cmd_login_status,
             "logout": self._cmd_logout,
@@ -244,7 +246,25 @@ class TranscriptWebSocket:
             project_path = self._project_manager.get_project_path(active)
             store = ProjectStore(project_path)
             titles = store.list_documents()
-            return {"docs": titles}
+
+            registry = {}
+            try:
+                registry = self._project_manager.get_doc_registry(active)
+            except Exception:
+                registry = {}
+
+            docs = []
+            for t in titles:
+                meta = registry.get(t) if isinstance(registry, dict) else None
+                if not isinstance(meta, dict):
+                    meta = {}
+                docs.append({
+                    "title": t,
+                    "description": meta.get("description", ""),
+                    "priority": meta.get("priority", "normal"),
+                })
+
+            return {"docs": docs}
         except Exception:
             logger.exception("Failed to list docs")
             return {"docs": []}
@@ -282,7 +302,57 @@ class TranscriptWebSocket:
         # Reload retriever to pick up changes
         self._reload_retriever(active)
 
-        return {"deleted_chunks": deleted, "docs": store.list_documents()}
+        # Return refreshed list with meta
+        titles = store.list_documents()
+        registry = {}
+        try:
+            registry = self._project_manager.get_doc_registry(active)
+        except Exception:
+            registry = {}
+        docs = []
+        for t in titles:
+            meta = registry.get(t) if isinstance(registry, dict) else None
+            if not isinstance(meta, dict):
+                meta = {}
+            docs.append({
+                "title": t,
+                "description": meta.get("description", ""),
+                "priority": meta.get("priority", "normal"),
+            })
+
+        return {"deleted_chunks": deleted, "docs": docs}
+
+    async def _cmd_get_doc_meta(self, params: dict) -> dict:
+        """Return doc registry for active project."""
+        active = self._settings_manager.get_active_project() if self._settings_manager else ""
+        if not active or not self._project_manager:
+            return {"doc_registry": {}}
+        return {"doc_registry": self._project_manager.get_doc_registry(active)}
+
+    async def _cmd_update_doc_meta(self, params: dict) -> dict:
+        """Update per-document metadata (description/priority)."""
+        active = self._settings_manager.get_active_project() if self._settings_manager else ""
+        if not active or not self._project_manager:
+            raise RuntimeError("No active project")
+
+        title = (params.get("title") or "").strip()
+        if not title:
+            raise ValueError("title is required")
+
+        description = params.get("description")
+        priority = params.get("priority")
+
+        entry = self._project_manager.update_doc_meta(
+            active,
+            title,
+            description=description,
+            priority=priority,
+        )
+
+        # Reload retriever to pick up new priorities
+        self._reload_retriever(active)
+
+        return {"title": title, "meta": entry}
 
     # --- OAuth login commands ---
 

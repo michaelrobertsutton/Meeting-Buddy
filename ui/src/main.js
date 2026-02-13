@@ -359,16 +359,62 @@ async function refreshDocList() {
             li.textContent = 'No documents ingested';
             dom.docList.appendChild(li);
         } else {
-            for (const title of docs) {
+            for (const d of docs) {
+                // Back-compat: server used to return string titles
+                const title = (typeof d === 'string') ? d : d.title;
+                const description = (typeof d === 'string') ? '' : (d.description || '');
+                const priority = (typeof d === 'string') ? 'normal' : (d.priority || 'normal');
+
                 const li = document.createElement('li');
-                const span = document.createElement('span');
-                span.className = 'doc-title';
-                span.textContent = title;
+
+                const titleSpan = document.createElement('span');
+                titleSpan.className = 'doc-title';
+                titleSpan.textContent = title;
+
+                const descInput = document.createElement('input');
+                descInput.className = 'doc-desc';
+                descInput.type = 'text';
+                descInput.placeholder = 'Description (one line)';
+                descInput.value = description;
+
+                const prSelect = document.createElement('select');
+                prSelect.className = 'doc-priority';
+                for (const pr of ['high', 'normal', 'low']) {
+                    const opt = document.createElement('option');
+                    opt.value = pr;
+                    opt.textContent = pr;
+                    if (pr === priority) opt.selected = true;
+                    prSelect.appendChild(opt);
+                }
+
+                // Debounced save helper
+                let saveTimer = null;
+                function scheduleSave() {
+                    if (saveTimer) clearTimeout(saveTimer);
+                    saveTimer = setTimeout(async () => {
+                        try {
+                            await sendCommand('update_doc_meta', {
+                                title,
+                                description: descInput.value,
+                                priority: prSelect.value,
+                            });
+                        } catch (err) {
+                            console.error('[Settings] update_doc_meta failed:', err);
+                        }
+                    }, 400);
+                }
+
+                descInput.addEventListener('input', scheduleSave);
+                prSelect.addEventListener('change', scheduleSave);
+
                 const btn = document.createElement('button');
                 btn.textContent = 'Delete';
                 btn.className = 'btn-danger';
                 btn.addEventListener('click', () => deleteDoc(title));
-                li.appendChild(span);
+
+                li.appendChild(titleSpan);
+                li.appendChild(descInput);
+                li.appendChild(prSelect);
                 li.appendChild(btn);
                 dom.docList.appendChild(li);
             }
