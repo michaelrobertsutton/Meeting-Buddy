@@ -47,6 +47,10 @@ class TranscriptWebSocket:
         self._ingestion_in_progress: bool = False
         # In-memory history of Q&A pairs for the current session
         self._qa_history: list[dict] = []
+        self._session_start: float = time.time()
+        # Prep-mode cache (pre-meeting Q&A)
+        self._prep_questions: list[str] = []
+        self._prep_results: dict[str, dict] = {}  # question -> answer dict
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -112,6 +116,11 @@ class TranscriptWebSocket:
             "logout": self._cmd_logout,
             "select_question": self._cmd_select_question,
             "get_qa_history": self._cmd_get_qa_history,
+            "set_question": self._cmd_set_question,
+            "generate_prep_questions": self._cmd_generate_prep_questions,
+            "get_prep_results": self._cmd_get_prep_results,
+            "add_prep_question": self._cmd_add_prep_question,
+            "export_session": self._cmd_export_session,
         }
 
         handler = handlers.get(cmd)
@@ -360,6 +369,108 @@ class TranscriptWebSocket:
         """Return the current in-memory Q&A history for this session."""
         # Return a shallow copy so callers can't mutate internal state
         return {"qa_history": list(self._qa_history)}
+
+    async def _cmd_set_question(self, params: dict) -> dict:
+        """Manually override the active question with free-form text."""
+        text = (params.get("text") or "").strip()
+        if not self._extractor:
+            raise RuntimeError("Question extractor not available")
+
+        # Empty string = clear manual override
+        if not text:
+            self._extractor.select_question(None)
+            return {"selected": None}
+
+        self._extractor.select_question(text)
+        if self._synthesis_engine:
+            asyncio.create_task(self._run_synthesis(text))
+        return {"selected": text}
+
+    # --- Prep mode (pre-meeting Q&A) ---
+
+    async def _cmd_generate_prep_questions(self, params: dict) -> dict:
+        count = int(params.get("count", 12))
+        active = self._settings_manager.get_active_project() if self._settings_manager else ""
+        if not active or not self._project_manager:
+            raise RuntimeError("No active project")
+        if not self._synthesis_engine:
+            raise RuntimeError("Synthesis engine not available")
+
+        # Use doc_registry descriptions/priorities as the context seed.
+        doc_registry = self._project_manager.get_doc_registry(active)
+        from backend.synthesis.prep import PrepQuestionGenerator
+
+        gen = PrepQuestionGenerator(self._synthesis_engine)
+        qs = await gen.generate(doc_registry, count=count)
+        self._prep_questions = qs
+        self._prep_results = {}
+        return {"questions": qs}
+
+    async def _cmd_get_prep_results(self, params: dict) -> dict:
+        return {
+            "questions": self._prep_questions,
+            "results": self._prep_results,
+        }
+
+    async def _cmd_add_prep_question(self, params: dict) -> dict:
+        q = (params.get("text") or "").strip()
+        if not q:
+            raise ValueError("text is required")
+        if q not in self._prep_questions:
+            self._prep_questions.append(q)
+
+        if self._synthesis_engine:
+            result = await self._synthesis_engine.synthesize_once(q)
+            self._prep_results[q] = result.to_dict()
+        return {"questions": self._prep_questions, "results": self._prep_results}
+
+    async def _cmd_export_session(self, params: dict) -> dict:
+        """Export session data as markdown or JSON."""
+        from backend.export.renderer import SessionData, render_json, render_markdown
+
+        fmt = params.get("format", "markdown")
+        if fmt not in ("markdown", "json"):
+            raise ValueError(f"Unsupported format: {fmt}")
+
+        save_path = params.get("path", "")
+
+        # Collect session data
+        segments = self.buffer.get_segments()
+        project_name = ""
+        if self._settings_manager:
+            project_name = self._settings_manager.get_active_project() or ""
+
+        session = SessionData(
+            transcript_segments=[seg.to_dict() for seg in segments],
+            qa_history=self._qa_history,
+            project_name=project_name,
+            session_start=self._session_start,
+            session_end=time.time(),
+        )
+
+        if fmt == "markdown":
+            content = render_markdown(session)
+            ext = ".md"
+        else:
+            content = render_json(session)
+            ext = ".json"
+
+        # Determine output path
+        if save_path:
+            out = Path(save_path)
+        else:
+            export_dir = Path("~/.meeting-buddy/exports").expanduser()
+            export_dir.mkdir(parents=True, exist_ok=True)
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"session_{timestamp}{ext}"
+            out = export_dir / filename
+
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(content, encoding="utf-8")
+        logger.info("Session exported to %s", out)
+
+        return {"path": str(out), "format": fmt}
 
     # --- Background ingestion ---
 

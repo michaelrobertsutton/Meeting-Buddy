@@ -14,6 +14,8 @@ const state = {
     manualQuestion: false,
     synthesisSearching: false,
     qaHistory: [],
+    prepQuestions: [],
+    prepResults: {},
 };
 
 const WS_URL = 'ws://localhost:8765';
@@ -70,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Header project switcher
     dom.headerProject = document.getElementById('header-project');
+    dom.quickQuestion = document.getElementById('quick-question');
 
     // Question history
     dom.btnAutoQuestion = document.getElementById('btn-auto-question');
@@ -103,6 +106,12 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.docList = document.getElementById('doc-list');
     dom.btnCloseSettings = document.getElementById('btn-close-settings');
     dom.btnLogin = document.getElementById('btn-login');
+
+    // Prep mode
+    dom.btnGeneratePrep = document.getElementById('btn-generate-prep');
+    dom.prepQuestionInput = document.getElementById('prep-question-input');
+    dom.btnAddPrep = document.getElementById('btn-add-prep');
+    dom.prepList = document.getElementById('prep-list');
     dom.loginStatus = document.getElementById('login-status');
     dom.oauthLoggedOut = document.getElementById('oauth-logged-out');
     dom.oauthLoggedIn = document.getElementById('oauth-logged-in');
@@ -141,6 +150,30 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.headerProject.addEventListener('change', headerSwitchProject);
     dom.btnAutoQuestion.addEventListener('click', resumeAutoQuestion);
     dom.btnQuestionHistory.addEventListener('click', toggleQuestionHistory);
+
+    // Prep mode
+    dom.btnGeneratePrep.addEventListener('click', generatePrep);
+    dom.btnAddPrep.addEventListener('click', addPrepQuestion);
+    dom.prepQuestionInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') addPrepQuestion();
+    });
+
+    // Quick-type question override
+    dom.quickQuestion.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            setManualQuestionFromInput();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            dom.quickQuestion.value = '';
+            setManualQuestionFromInput();
+            dom.quickQuestion.blur();
+        }
+    });
+    dom.quickQuestion.addEventListener('blur', () => {
+        // Commit whatever is in the box on blur (useful after paste)
+        setManualQuestionFromInput();
+    });
 
     // Enter key for inputs
     dom.apiKeyInput.addEventListener('keydown', (e) => {
@@ -250,6 +283,9 @@ async function loadSettings() {
 
         // Docs
         refreshDocList();
+
+        // Prep mode (best-effort)
+        refreshPrep();
     } catch (err) {
         console.error('[Settings] Load failed:', err);
     }
@@ -474,6 +510,100 @@ async function deleteDoc(title) {
     }
 }
 
+// --- Prep Mode ---
+async function refreshPrep() {
+    if (!dom.prepList) return;
+    try {
+        const data = await sendCommand('get_prep_results');
+        state.prepQuestions = data.questions || [];
+        state.prepResults = data.results || {};
+        renderPrepList();
+    } catch (err) {
+        // Quietly ignore if backend doesn't support yet
+        console.debug('[Prep] refresh failed:', err.message);
+    }
+}
+
+function renderPrepList() {
+    dom.prepList.innerHTML = '';
+    const qs = state.prepQuestions || [];
+    if (qs.length === 0) {
+        const li = document.createElement('li');
+        li.className = 'empty-msg';
+        li.textContent = 'No prep questions yet';
+        dom.prepList.appendChild(li);
+        return;
+    }
+
+    for (const q of qs) {
+        const li = document.createElement('li');
+        li.className = 'prep-item';
+
+        const qSpan = document.createElement('span');
+        qSpan.className = 'prep-q';
+        qSpan.textContent = q;
+
+        const btnAsk = document.createElement('button');
+        btnAsk.textContent = 'Ask';
+        btnAsk.className = 'btn-secondary';
+        btnAsk.addEventListener('click', async () => {
+            // Push into manual override and trigger synthesis
+            if (dom.quickQuestion) dom.quickQuestion.value = q;
+            try {
+                await sendCommand('set_question', { text: q });
+            } catch (err) {
+                console.error('[Prep] Ask failed:', err);
+            }
+        });
+
+        li.appendChild(qSpan);
+        li.appendChild(btnAsk);
+
+        const ans = state.prepResults ? state.prepResults[q] : null;
+        if (ans && ans.one_liner) {
+            const a = document.createElement('div');
+            a.className = 'prep-a';
+            a.textContent = ans.one_liner;
+            li.appendChild(a);
+        }
+
+        dom.prepList.appendChild(li);
+    }
+}
+
+async function generatePrep() {
+    dom.btnGeneratePrep.disabled = true;
+    dom.btnGeneratePrep.textContent = 'Generating...';
+    try {
+        const data = await sendCommand('generate_prep_questions', { count: 12 });
+        state.prepQuestions = data.questions || [];
+        state.prepResults = {};
+        renderPrepList();
+    } catch (err) {
+        console.error('[Prep] generate failed:', err);
+    } finally {
+        dom.btnGeneratePrep.disabled = false;
+        dom.btnGeneratePrep.textContent = 'Generate Prep Questions';
+    }
+}
+
+async function addPrepQuestion() {
+    const text = (dom.prepQuestionInput.value || '').trim();
+    if (!text) return;
+    dom.btnAddPrep.disabled = true;
+    try {
+        const data = await sendCommand('add_prep_question', { text });
+        state.prepQuestions = data.questions || [];
+        state.prepResults = data.results || {};
+        dom.prepQuestionInput.value = '';
+        renderPrepList();
+    } catch (err) {
+        console.error('[Prep] add failed:', err);
+    } finally {
+        dom.btnAddPrep.disabled = false;
+    }
+}
+
 // --- File Picker ---
 async function pickFiles() {
     try {
@@ -548,6 +678,7 @@ function renderIngestComplete(data) {
     // Refresh doc list and project list
     refreshDocList();
     loadSettings();
+    refreshPrep();
 }
 
 // --- WebSocket ---
@@ -705,6 +836,12 @@ function handleMessage(msg) {
     // Track manual mode
     state.manualQuestion = !!msg.manual_question;
     dom.btnAutoQuestion.classList.toggle('active', !state.manualQuestion);
+    document.body.classList.toggle('manual-question', state.manualQuestion);
+
+    // If manual mode turned off by server (e.g., timeout), clear the quick input
+    if (!state.manualQuestion && dom.quickQuestion && dom.quickQuestion.value) {
+        dom.quickQuestion.value = '';
+    }
 
     // Update synthesis searching state
     if (msg.synthesis_searching !== undefined) {
@@ -856,7 +993,10 @@ async function selectQuestion(text) {
     try {
         await sendCommand('select_question', { text });
         state.manualQuestion = true;
+        document.body.classList.add('manual-question');
         dom.btnAutoQuestion.classList.remove('active');
+        // Sync quick input
+        if (dom.quickQuestion) dom.quickQuestion.value = text || '';
         renderQuestion(text);
         renderQuestionHistory();
     } catch (err) {
@@ -864,12 +1004,31 @@ async function selectQuestion(text) {
     }
 }
 
+let _quickQuestionTimer = null;
+async function setManualQuestionFromInput() {
+    if (!dom.quickQuestion) return;
+    const text = dom.quickQuestion.value.trim();
+
+    // Debounce rapid typing/blur
+    if (_quickQuestionTimer) clearTimeout(_quickQuestionTimer);
+    _quickQuestionTimer = setTimeout(async () => {
+        try {
+            await sendCommand('set_question', { text });
+            // UI state will also be updated from server snapshot/update
+        } catch (err) {
+            console.error('[Question] set_question failed:', err);
+        }
+    }, 150);
+}
+
 async function resumeAutoQuestion() {
     if (!state.manualQuestion) return;
     try {
         await sendCommand('select_question', {});
         state.manualQuestion = false;
+        document.body.classList.remove('manual-question');
         dom.btnAutoQuestion.classList.add('active');
+        if (dom.quickQuestion) dom.quickQuestion.value = '';
     } catch (err) {
         console.error('[Question] Resume auto failed:', err);
     }
