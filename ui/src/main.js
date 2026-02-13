@@ -108,7 +108,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // Q&A history
     dom.qaHistoryList = document.getElementById('qa-history-list');
 
-    // Answer searching
+    // Answer section
+    dom.answer = document.getElementById('answer');
     dom.answerSearching = document.getElementById('answer-searching');
 
     // Settings elements
@@ -124,6 +125,8 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.btnCancelCreate = document.getElementById('btn-cancel-create');
     dom.btnAddFiles = document.getElementById('btn-add-files');
     dom.btnAddFolder = document.getElementById('btn-add-folder');
+    dom.urlInput = document.getElementById('url-input');
+    dom.btnAddUrl = document.getElementById('btn-add-url');
     dom.ingestProgress = document.getElementById('ingest-progress');
     dom.progressFill = document.getElementById('progress-fill');
     dom.progressText = document.getElementById('progress-text');
@@ -174,6 +177,10 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.projectSelect.addEventListener('change', switchProject);
     dom.btnAddFiles.addEventListener('click', pickFiles);
     dom.btnAddFolder.addEventListener('click', pickFolder);
+    dom.btnAddUrl.addEventListener('click', addUrl);
+    dom.urlInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') addUrl();
+    });
     dom.btnLogin.addEventListener('click', startLogin);
     dom.btnLogout.addEventListener('click', doLogout);
     dom.headerProject.addEventListener('change', headerSwitchProject);
@@ -672,6 +679,25 @@ async function pickFolder() {
         }
     } catch (err) {
         console.error('[Settings] Folder picker failed:', err);
+    }
+}
+
+async function addUrl() {
+    const url = (dom.urlInput.value || '').trim();
+    if (!url) return;
+    
+    // Basic URL validation
+    if (!url.match(/^https?:\/\/.+/)) {
+        alert('Please enter a valid URL starting with http:// or https://');
+        return;
+    }
+    
+    try {
+        dom.urlInput.value = '';
+        startIngestion([url]);
+    } catch (err) {
+        console.error('[Settings] Add URL failed:', err);
+        alert('Failed to add URL: ' + err.message);
     }
 }
 
@@ -1295,16 +1321,42 @@ function renderAnswer(data) {
     dom.answerText.classList.remove('streaming');
     dom.answerSearching.classList.add('hidden');
 
+    // Apply confidence-based styling
+    const confidence = data.confidence || 0.0;
+    dom.answer.classList.remove('confidence-high', 'confidence-medium', 'confidence-low');
+    if (confidence > 0.6) {
+        dom.answer.classList.add('confidence-high');
+    } else if (confidence >= 0.3) {
+        dom.answer.classList.add('confidence-medium');
+    } else {
+        dom.answer.classList.add('confidence-low');
+    }
+
     // Show "not found" hint when confidence is 0 and no evidence bullets
     const noResults = !data.one_liner && (data.bullets || []).length === 0;
     const lowConfidence = data.confidence === 0 && (data.bullets || []).length === 0;
 
+    // Render one-liner
     if (lowConfidence && data.one_liner) {
         dom.answerText.textContent = data.one_liner;
         dom.answerText.classList.remove('placeholder');
     } else {
         dom.answerText.textContent = data.one_liner || 'Waiting for question...';
         dom.answerText.classList.toggle('placeholder', !data.one_liner);
+    }
+    
+    // Add confidence warning label if confidence is low
+    let warningLabel = dom.answer.querySelector('.confidence-warning');
+    if (confidence < 0.3 && data.one_liner) {
+        if (!warningLabel) {
+            warningLabel = document.createElement('span');
+            warningLabel.className = 'confidence-warning';
+            warningLabel.textContent = 'Low Confidence';
+            // Insert after the answer text paragraph
+            dom.answerText.parentNode.insertBefore(warningLabel, dom.answerText.nextSibling);
+        }
+    } else if (warningLabel) {
+        warningLabel.remove();
     }
 
     // Evidence-backed bullets

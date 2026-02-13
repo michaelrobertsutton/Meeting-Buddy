@@ -545,27 +545,43 @@ class TranscriptWebSocket:
             loop = asyncio.get_event_loop()
 
             for i, path_str in enumerate(paths):
-                path = Path(path_str)
+                # Detect if it's a URL
+                is_url = isinstance(path_str, str) and ("://" in path_str or path_str.startswith("http"))
+                
                 try:
+                    if is_url:
+                        display_name = path_str
+                    else:
+                        path = Path(path_str)
+                        display_name = path.name
+                    
                     await self._broadcast_event({
                         "type": "ingest_progress",
                         "current": i + 1,
                         "total": len(paths),
-                        "file": path.name,
+                        "file": display_name,
                     })
 
-                    if path.is_dir():
-                        count = await loop.run_in_executor(
-                            None, pipeline.ingest_directory, project_name, path
-                        )
-                    else:
+                    if is_url:
+                        # Ingest URL directly
                         count = await loop.run_in_executor(
                             None, pipeline.ingest_file, project_name, path_str
                         )
+                    else:
+                        path = Path(path_str)
+                        if path.is_dir():
+                            count = await loop.run_in_executor(
+                                None, pipeline.ingest_directory, project_name, path
+                            )
+                        else:
+                            count = await loop.run_in_executor(
+                                None, pipeline.ingest_file, project_name, path_str
+                            )
                     total_chunks += count
                 except Exception as e:
                     logger.exception("Failed to ingest %s", path_str)
-                    errors.append({"file": path.name, "error": str(e)})
+                    display_name = path_str if is_url else Path(path_str).name
+                    errors.append({"file": display_name, "error": str(e)})
 
             # Reload retriever after ingestion
             self._reload_retriever(project_name)

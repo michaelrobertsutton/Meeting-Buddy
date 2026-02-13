@@ -310,6 +310,40 @@ body.manual-question #quick-question {
 
 /* --- Answer Section --- */
 
+#answer {
+    border-radius: 6px;
+    padding: 8px;
+    transition: border-color 0.2s ease;
+}
+
+#answer.confidence-high {
+    border: 2px solid rgba(76, 175, 80, 0.6);
+    background: rgba(76, 175, 80, 0.05);
+}
+
+#answer.confidence-medium {
+    border: 2px solid rgba(255, 193, 7, 0.6);
+    background: rgba(255, 193, 7, 0.05);
+}
+
+#answer.confidence-low {
+    border: 2px solid rgba(244, 67, 54, 0.6);
+    background: rgba(244, 67, 54, 0.05);
+}
+
+.confidence-warning {
+    display: inline-block;
+    padding: 2px 6px;
+    margin-left: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #ff5252;
+    background: rgba(244, 67, 54, 0.15);
+    border-radius: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
 #answer-searching {
     display: flex;
     align-items: center;

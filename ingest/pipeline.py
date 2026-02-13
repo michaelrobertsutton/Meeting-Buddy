@@ -22,10 +22,17 @@ class IngestPipeline:
         self._manager = ProjectManager(config.project)
 
     def ingest_file(self, project_name: str, file_path: str | Path) -> int:
-        """Ingest a single file into a project. Returns chunk count."""
-        file_path = Path(file_path)
-        if not file_path.exists():
-            raise FileNotFoundError(f"File not found: {file_path}")
+        """Ingest a single file or URL into a project. Returns chunk count."""
+        # Check if it's a URL
+        is_url = isinstance(file_path, str) and ("://" in file_path or file_path.startswith("http"))
+        
+        if not is_url:
+            file_path = Path(file_path)
+            if not file_path.exists():
+                raise FileNotFoundError(f"File not found: {file_path}")
+            display_name = file_path.name
+        else:
+            display_name = file_path
 
         project_path = self._manager.get_project_path(project_name)
         if not project_path.exists():
@@ -33,7 +40,7 @@ class IngestPipeline:
 
         store = ProjectStore(project_path, self._config.retrieval)
 
-        logger.info("Parsing %s", file_path.name)
+        logger.info("Parsing %s", display_name)
         doc = parse_document(file_path)
 
         logger.info("Chunking (got %d sections)", len(doc.sections))
@@ -59,7 +66,7 @@ class IngestPipeline:
         logger.info("Storing chunks")
         store.add_chunks(chunks, embeddings)
 
-        logger.info("Ingested %s: %d chunks", file_path.name, len(chunks))
+        logger.info("Ingested %s: %d chunks", display_name, len(chunks))
         return len(chunks)
 
     def ingest_directory(
