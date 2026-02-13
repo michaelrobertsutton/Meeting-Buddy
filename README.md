@@ -55,6 +55,62 @@ cd ui && npm install && cd ..
 
 The first run downloads the Whisper model (~500MB for `small`) — one-time only.
 
+### Building and Installing the App Bundle
+
+**Quick install (all-in-one command):**
+
+```bash
+# Replace with your actual project path
+cd "/path/to/Meeting Buddy" && \
+source .venv/bin/activate && \
+cd audio-capture && swift build -c release && cd .. && \
+cd ui && npm run tauri build && cd .. && \
+rm -rf "/Applications/Meeting Buddy.app" && \
+cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
+```
+
+Or if you're already in the project directory:
+
+```bash
+source .venv/bin/activate && \
+cd audio-capture && swift build -c release && cd .. && \
+cd ui && npm run tauri build && cd .. && \
+rm -rf "/Applications/Meeting Buddy.app" && \
+cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
+```
+
+**Step-by-step (if you prefer):**
+
+```bash
+# Ensure you're in the project root with venv activated
+source .venv/bin/activate
+
+# Build the Swift audio capture helper (required for bundling)
+cd audio-capture && swift build -c release && cd ..
+
+# Build the Tauri app bundle
+cd ui
+npm run tauri build
+cd ..
+```
+
+This creates a `.app` bundle at:
+```
+ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app
+```
+
+Then install to Applications:
+
+```bash
+# Remove old version if it exists (optional)
+rm -rf "/Applications/Meeting Buddy.app"
+
+# Install new version
+cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
+```
+
+**Note:** The bundled app includes the Tauri UI overlay, Python backend as a sidecar, and AudioCapture Swift binary. The app bundle expects to find the project's `.venv` directory at runtime.
+
 ## Usage
 
 ### Quick start (UI manages everything)
