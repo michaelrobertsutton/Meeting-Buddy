@@ -632,7 +632,8 @@ body:not(.has-question) .answer-card {
 .modal {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.45);
+    background: rgba(0, 0, 0, 0.25);
+    backdrop-filter: blur(8px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -642,9 +643,11 @@ body:not(.has-question) .answer-card {
 .modal-card {
     width: min(560px, calc(100vw - 32px));
     border-radius: var(--mb-radius-lg);
-    border: 0.5px solid rgba(255,255,255,0.14);
-    background: color-mix(in srgb, rgba(20, 20, 25, 0.86) 70%, transparent);
-    padding: 16px;
+    border: 0.5px solid rgba(255,255,255,0.2);
+    background: color-mix(in srgb, rgba(30, 30, 35, 0.95) 85%, transparent);
+    backdrop-filter: blur(12px);
+    padding: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
 }
 
 .modal-title {
