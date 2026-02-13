@@ -1,3 +1,24 @@
+:root {
+    /* --- Phase UI tokens --- */
+    --mb-accent: #60B6F2;
+
+    --mb-bg: rgba(20, 20, 25, 0.92);
+    --mb-glass: rgba(255, 255, 255, 0.04);
+
+    --mb-border: rgba(255, 255, 255, 0.10);
+    --mb-border-subtle: rgba(255, 255, 255, 0.06);
+
+    --mb-text: #e6e6e6;
+    --mb-text-secondary: #a8a8b2;
+    --mb-text-tertiary: #7b7b86;
+
+    --mb-radius-lg: 12px;
+    --mb-radius-md: 8px;
+    --mb-radius-sm: 6px;
+
+    --mb-font: ui-rounded, "SF Pro Rounded", -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+}
+
 *, *::before, *::after {
     margin: 0;
     padding: 0;
@@ -8,16 +29,17 @@ html, body {
     height: 100%;
     overflow: hidden;
     background: transparent;
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
+    font-family: var(--mb-font);
     font-size: 13px;
-    color: #e0e0e0;
+    color: var(--mb-text);
     user-select: none;
 }
 
 body {
-    background: rgba(20, 20, 25, 0.92);
-    border-radius: 12px;
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    /* With macOS vibrancy, prefer a lighter tint so the material shows through */
+    background: color-mix(in srgb, var(--mb-bg) 60%, transparent);
+    border-radius: var(--mb-radius-lg);
+    border: 0.5px solid var(--mb-border);
     display: flex;
     flex-direction: column;
 }
@@ -27,11 +49,11 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 6px 12px;
-    background: rgba(255, 255, 255, 0.04);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: var(--mb-glass);
+    border-bottom: 1px solid var(--mb-border-subtle);
     cursor: grab;
     flex-shrink: 0;
-    border-radius: 12px 12px 0 0;
+    border-radius: var(--mb-radius-lg) var(--mb-radius-lg) 0 0;
 }
 
 #drag-handle .title {
@@ -48,7 +70,7 @@ body {
     border-radius: 4px;
     padding: 1px 18px 1px 6px;
     font-size: 10px;
-    color: #81d4fa;
+    color: var(--mb-accent);
     font-family: inherit;
     outline: none;
     appearance: none;
@@ -78,16 +100,16 @@ body {
 }
 
 #quick-question:focus {
-    border-color: rgba(79, 195, 247, 0.35);
+    border-color: color-mix(in srgb, var(--mb-accent) 35%, transparent);
 }
 
 body.manual-question #quick-question {
-    border-color: rgba(79, 195, 247, 0.55);
-    background: rgba(79, 195, 247, 0.10);
+    border-color: color-mix(in srgb, var(--mb-accent) 55%, transparent);
+    background: color-mix(in srgb, var(--mb-accent) 10%, transparent);
 }
 
 #header-project:hover {
-    border-color: rgba(79, 195, 247, 0.3);
+    border-color: color-mix(in srgb, var(--mb-accent) 30%, transparent);
     background-color: rgba(255, 255, 255, 0.1);
 }
 
@@ -201,8 +223,8 @@ body.manual-question #quick-question {
 }
 
 .qh-btn.active {
-    color: #4fc3f7;
-    border-color: rgba(79, 195, 247, 0.3);
+    color: var(--mb-accent);
+    border-color: color-mix(in srgb, var(--mb-accent) 30%, transparent);
 }
 
 #qh-count {
@@ -857,17 +879,17 @@ body.pinned #drag-handle {
     width: 100%;
     padding: 8px 12px;
     font-size: 13px;
-    font-weight: 500;
-    background: rgba(79, 195, 247, 0.2);
-    border: 1px solid rgba(79, 195, 247, 0.4);
-    color: #4fc3f7;
-    border-radius: 6px;
+    font-weight: 600;
+    background: color-mix(in srgb, var(--mb-accent) 20%, transparent);
+    border: 1px solid color-mix(in srgb, var(--mb-accent) 40%, transparent);
+    color: var(--mb-accent);
+    border-radius: var(--mb-radius-md);
     cursor: pointer;
     margin-bottom: 6px;
 }
 
 .btn-login:hover {
-    background: rgba(79, 195, 247, 0.3);
+    background: color-mix(in srgb, var(--mb-accent) 28%, transparent);
 }
 
 .btn-login:disabled {

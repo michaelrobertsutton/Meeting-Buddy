@@ -773,7 +773,6 @@ let reconnectTimer = null;
 
 let _reconnectAttempts = 0;
 const MAX_RECONNECT_ATTEMPTS = 10;
-const RECONNECT_DELAY_MS = 2000;
 
 function connectWebSocket() {
     setConnectionStatus('connecting');
