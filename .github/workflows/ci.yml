@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  python_syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Python syntax check
+        run: |
+          python -m compileall -q backend ingest
+
+  ui_syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: JS syntax check
+        run: |
+          node -c ui/src/main.js
+          node -c ui/src/settings.js
+
+      - name: Frontend build step (static copy)
+        run: |
+          cd ui
+          npm ci
+          npm run build-frontend
