@@ -810,24 +810,7 @@ body:not(.has-question):not(.has-answer-content) #answer {
     border-radius: 2px;
 }
 
-.trust-badge {
-    position: absolute;
-    bottom: 28px;
-    left: 12px;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    border-radius: 999px;
-    border: 1px solid color-mix(in srgb, var(--mb-accent) 30%, transparent);
-    background: color-mix(in srgb, var(--mb-accent) 10%, transparent);
-    color: var(--mb-accent);
-    font-size: 11px;
-    pointer-events: none;
-    z-index: 1;
-}
 
-.trust-icon { font-size: 12px; }
 
 #status-bar {
     display: flex;

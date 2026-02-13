@@ -6,8 +6,6 @@ final class WebSocketClient: ObservableObject {
     @Published var lastError: String? = nil
     @Published var settingsError: String? = nil
 
-    @Published var settingsError: String? = nil
-
     @Published var segments: [TranscriptSegment] = []
     @Published var activeQuestion: String = ""
     @Published var oneLiner: String = ""
