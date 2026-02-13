@@ -128,6 +128,7 @@ class TranscriptWebSocket:
             "unpin_answer": self._cmd_unpin_answer,
             "get_pinned": self._cmd_get_pinned,
             "export_session": self._cmd_export_session,
+            "get_audio_status": self._cmd_get_audio_status,
         }
 
         handler = handlers.get(cmd)
@@ -529,6 +530,17 @@ class TranscriptWebSocket:
 
         return {"path": str(out), "format": fmt}
 
+    async def _cmd_get_audio_status(self, params: dict) -> dict:
+        """Return diagnostic information about audio capture."""
+        if not hasattr(self, '_capture') or self._capture is None:
+            return {
+                "error": "Audio capture not available",
+                "running": False,
+            }
+        
+        status = self._capture.get_status()
+        return {"audio_status": status}
+
     # --- Background ingestion ---
 
     async def _run_ingestion(self, project_name: str, paths: list[str]) -> None:
@@ -668,6 +680,33 @@ class TranscriptWebSocket:
                 # Only auto-trigger synthesis when not in manual mode
                 if not self._synthesis_in_flight and self._extractor and self._extractor._manual_question is None:
                     asyncio.create_task(self._run_synthesis(question))
+
+            # Periodic audio health check (every 10 seconds)
+            current_time = time.time()
+            if not hasattr(self, '_last_audio_check_time'):
+                self._last_audio_check_time = current_time
+            
+            if current_time - self._last_audio_check_time >= 10.0:
+                self._last_audio_check_time = current_time
+                if hasattr(self, '_capture') and self._capture:
+                    status = self._capture.get_status()
+                    if not status.get("receiving_audio", False) and status.get("running", False):
+                        # Process is running but no audio received in last 2 seconds
+                        seconds_since = status.get("seconds_since_last_frame", 0)
+                        frames_received = status.get("frames_received", 0)
+                        logger.warning(
+                            "Audio capture health check: Process running but no audio frames received "
+                            "in last %.1f seconds (total frames: %d). "
+                            "Check Screen Recording permission and ensure audio is playing.",
+                            seconds_since,
+                            frames_received
+                        )
+                        # Broadcast warning to clients
+                        await self._broadcast_event({
+                            "type": "audio_warning",
+                            "message": "No audio detected. Check Screen Recording permission and ensure audio is playing.",
+                            "status": status,
+                        })
 
             if not transcript_changed and not question_changed:
                 continue

@@ -37,6 +37,10 @@ class SCKCapture:
         self._stderr_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._overflow_count = 0
+        self._frames_received = 0
+        self._last_frame_time: float | None = None
+        self._process_exit_code: int | None = None
+        self._stderr_lines: list[str] = []
 
     def _read_exact(self, pipe, n: int) -> bytes | None:
         """Read exactly n bytes from pipe, or return None on EOF."""
@@ -50,19 +54,45 @@ class SCKCapture:
 
     def _reader_loop(self) -> None:
         """Read PCM frames from subprocess stdout and enqueue as float32."""
+        import time
+        
         assert self._process is not None
         pipe = self._process.stdout
         assert pipe is not None
+
+        logger.info("AudioCapture reader thread started")
+        first_frame_logged = False
 
         while not self._stop_event.is_set():
             data = self._read_exact(pipe, _FRAME_BYTES)
             if data is None:
                 if not self._stop_event.is_set():
-                    logger.warning("AudioCapture subprocess ended unexpectedly")
+                    # Check if process exited
+                    exit_code = self._process.poll()
+                    if exit_code is not None:
+                        self._process_exit_code = exit_code
+                        logger.error(
+                            "AudioCapture subprocess ended unexpectedly with exit code %d",
+                            exit_code
+                        )
+                        if self._stderr_lines:
+                            logger.error("AudioCapture stderr output:\n%s", "\n".join(self._stderr_lines[-10:]))
+                    else:
+                        logger.warning("AudioCapture subprocess stdout closed unexpectedly")
                 break
 
             # Convert Int16 little-endian to float32 in [-1.0, 1.0)
             samples = np.frombuffer(data, dtype="<i2").astype(np.float32) / _INT16_MAX
+            
+            # Check if audio is actually present (not just silence)
+            audio_level = np.abs(samples).max()
+            if audio_level > 0.001:  # Non-silent audio detected
+                if not first_frame_logged:
+                    logger.info("Audio frames received (level: %.3f)", audio_level)
+                    first_frame_logged = True
+
+            self._frames_received += 1
+            self._last_frame_time = time.time()
 
             try:
                 self._queue.put_nowait(samples)
@@ -82,7 +112,7 @@ class SCKCapture:
                         self._overflow_count,
                     )
 
-        logger.debug("Reader thread exiting")
+        logger.info("Reader thread exiting (received %d frames total)", self._frames_received)
 
     def _log_stderr(self) -> None:
         """Forward subprocess stderr to Python logging."""
@@ -92,10 +122,19 @@ class SCKCapture:
         for line in iter(pipe.readline, b""):
             text = line.decode("utf-8", errors="replace").rstrip()
             if text:
-                logger.debug("[AudioCapture] %s", text)
+                self._stderr_lines.append(text)
+                # Log errors and warnings at appropriate levels
+                if "ERROR" in text.upper() or "FAILED" in text.upper():
+                    logger.error("[AudioCapture] %s", text)
+                elif "WARNING" in text.upper() or "WARN" in text.upper():
+                    logger.warning("[AudioCapture] %s", text)
+                else:
+                    logger.info("[AudioCapture] %s", text)
 
     def start(self) -> None:
         """Start the AudioCapture subprocess and reader thread."""
+        import time
+        
         if not os.path.isfile(self.binary_path):
             raise FileNotFoundError(
                 f"AudioCapture binary not found at {self.binary_path}. "
@@ -104,6 +143,10 @@ class SCKCapture:
 
         logger.info("Starting SCK audio capture: %s", self.binary_path)
         self._stop_event.clear()
+        self._frames_received = 0
+        self._last_frame_time = None
+        self._process_exit_code = None
+        self._stderr_lines = []
 
         self._process = subprocess.Popen(
             [self.binary_path],
@@ -123,6 +166,18 @@ class SCKCapture:
         self._reader_thread.start()
 
         logger.info("SCK audio capture started (pid=%d)", self._process.pid)
+        
+        # Give it a moment to start, then check if process is still alive
+        time.sleep(0.5)
+        if self._process.poll() is not None:
+            exit_code = self._process.returncode
+            logger.error(
+                "AudioCapture process exited immediately with code %d. "
+                "Check Screen Recording permission in System Settings.",
+                exit_code
+            )
+            if self._stderr_lines:
+                logger.error("AudioCapture error output:\n%s", "\n".join(self._stderr_lines))
 
     def stop(self) -> None:
         """Stop the subprocess and reader thread."""
@@ -155,3 +210,30 @@ class SCKCapture:
             return self._queue.get(timeout=timeout)
         except queue.Empty:
             return None
+    
+    def get_status(self) -> dict:
+        """Return diagnostic status information."""
+        import time
+        
+        status = {
+            "running": self._process is not None and self._process.poll() is None,
+            "frames_received": self._frames_received,
+            "queue_size": self._queue.qsize(),
+            "overflow_count": self._overflow_count,
+        }
+        
+        if self._process:
+            status["pid"] = self._process.pid
+            status["exit_code"] = self._process.poll()
+        
+        if self._last_frame_time:
+            time_since_last_frame = time.time() - self._last_frame_time
+            status["seconds_since_last_frame"] = time_since_last_frame
+            status["receiving_audio"] = time_since_last_frame < 2.0
+        else:
+            status["receiving_audio"] = False
+        
+        if self._stderr_lines:
+            status["last_stderr_lines"] = self._stderr_lines[-5:]
+        
+        return status
