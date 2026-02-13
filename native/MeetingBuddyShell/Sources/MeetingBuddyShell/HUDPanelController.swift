@@ -12,7 +12,7 @@ final class HUDPanelController {
 
         let panel = NSPanel(
             contentRect: NSRect(x: 80, y: 120, width: 420, height: 700),
-            styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -22,6 +22,8 @@ final class HUDPanelController {
         panel.isFloatingPanel = true
         panel.level = .floating
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        panel.hasShadow = true
+        panel.isReleasedWhenClosed = false
         panel.isMovableByWindowBackground = true
         panel.hidesOnDeactivate = false
         panel.isOpaque = false
