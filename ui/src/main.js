@@ -326,13 +326,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.stopPropagation();
                 console.log('[Onboarding] Screen Settings button clicked - handler fired!');
                 try {
-                    const { open } = window.__TAURI__.shell;
-                    console.log('[Onboarding] Calling shell.open()...');
-                    await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+                    const { invoke } = window.__TAURI__.core;
+                    await invoke('open_system_settings_url', { url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture' });
                     console.log('[Onboarding] Screen settings opened successfully');
                 } catch (err) {
-                    console.error('[Onboarding] shell.open() failed:', err);
-                    // Fallback: try opening System Preferences directly
+                    console.error('[Onboarding] open_system_settings_url failed:', err);
                     try {
                         const { open } = window.__TAURI__.shell;
                         await open('x-apple.systempreferences:');
@@ -358,13 +356,11 @@ document.addEventListener('DOMContentLoaded', () => {
                 e.stopPropagation();
                 console.log('[Onboarding] Mic Settings button clicked - handler fired!');
                 try {
-                    const { open } = window.__TAURI__.shell;
-                    console.log('[Onboarding] Calling shell.open()...');
-                    await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+                    const { invoke } = window.__TAURI__.core;
+                    await invoke('open_system_settings_url', { url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone' });
                     console.log('[Onboarding] Mic settings opened successfully');
                 } catch (err) {
-                    console.error('[Onboarding] shell.open() failed:', err);
-                    // Fallback: try opening System Preferences directly
+                    console.error('[Onboarding] open_system_settings_url failed:', err);
                     try {
                         const { open } = window.__TAURI__.shell;
                         await open('x-apple.systempreferences:');
@@ -403,8 +399,8 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
             console.log('[Onboarding] Cmd+S pressed - opening Screen Recording settings');
             try {
-                const { open } = window.__TAURI__.shell;
-                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+                const { invoke } = window.__TAURI__.core;
+                await invoke('open_system_settings_url', { url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture' });
             } catch (err) {
                 console.error('[Onboarding] Failed:', err);
             }
@@ -413,8 +409,8 @@ document.addEventListener('DOMContentLoaded', () => {
             e.stopPropagation();
             console.log('[Onboarding] Cmd+M pressed - opening Microphone settings');
             try {
-                const { open } = window.__TAURI__.shell;
-                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+                const { invoke } = window.__TAURI__.core;
+                await invoke('open_system_settings_url', { url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone' });
             } catch (err) {
                 console.error('[Onboarding] Failed:', err);
             }
@@ -429,8 +425,8 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.btnOpenScreen.setAttribute('onclick', 'window.__openScreenSettings && window.__openScreenSettings()');
         window.__openScreenSettings = async () => {
             try {
-                const { open } = window.__TAURI__.shell;
-                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture');
+                const { invoke } = window.__TAURI__.core;
+                await invoke('open_system_settings_url', { url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture' });
             } catch (err) {
                 console.error('[Onboarding] Failed:', err);
             }
@@ -440,8 +436,8 @@ document.addEventListener('DOMContentLoaded', () => {
         dom.btnOpenMic.setAttribute('onclick', 'window.__openMicSettings && window.__openMicSettings()');
         window.__openMicSettings = async () => {
             try {
-                const { open } = window.__TAURI__.shell;
-                await open('x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone');
+                const { invoke } = window.__TAURI__.core;
+                await invoke('open_system_settings_url', { url: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone' });
             } catch (err) {
                 console.error('[Onboarding] Failed:', err);
             }

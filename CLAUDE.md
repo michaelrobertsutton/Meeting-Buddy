@@ -17,6 +17,11 @@ cd ui && npm run tauri dev                # Start overlay UI (separate terminal)
 cd audio-capture && swift build -c release   # Rebuild Swift audio helper
 cd ui && npm run tauri dev                   # Dev mode (hot reload)
 cd ui && npm run tauri build                 # Production build
+
+# Rebuild native SwiftUI settings app (sidecar for Cmd+,)
+cd native/MeetingBuddySettings && swift build -c release
+cp .build/release/MeetingBuddySettings \
+   ../../ui/src-tauri/MeetingBuddySettings-aarch64-apple-darwin
 ```
 
 ### Ingest CLI
