@@ -17,7 +17,7 @@ This is for **internal distribution** (no Mac App Store constraints).
 - Clean permission UX and fewer "webview quirks"
 
 ## Current backend contract
-- WebSocket protocol documented in `PROTOCOL.md`
+- WebSocket protocol documented in [protocol.md](protocol.md)
 - Snapshot/update messages include `protocol_version: 1`
 
 ## Proposed repo layout
@@ -32,7 +32,7 @@ Meeting Buddy/
       Sources/
 ```
 
-## Phase 1 spike (2–4 days): “Minimal native HUD”
+## Phase 1 spike (2–4 days): "Minimal native HUD"
 
 ### Deliverable
 A SwiftUI app that:
@@ -74,7 +74,7 @@ A SwiftUI app that:
    - Answer: one-liner
 
 5) **Retry + offline UX**
-   - If WS disconnects: show “Backend disconnected” + automatic reconnect
+   - If WS disconnects: show "Backend disconnected" + automatic reconnect
 
 ### Notes on permissions
 The native shell does not change capture permissions; the backend + Swift AudioCapture still drive audio.
@@ -84,7 +84,7 @@ The native shell does not change capture permissions; the backend + Swift AudioC
   - General
   - Documents
   - OpenAI Account
-- Reuse existing backend commands from `PROTOCOL.md`
+- Reuse existing backend commands from [protocol.md](protocol.md)
 
 ## Phase 3 (2–4 days): Menu bar + hotkeys
 - Menu bar item with actions

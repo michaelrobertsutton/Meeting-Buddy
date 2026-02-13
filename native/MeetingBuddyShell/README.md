@@ -32,5 +32,5 @@ swift run MeetingBuddyShell
 - Reconnect attempts + visible connected/disconnected state
 
 ## Notes
-- WebSocket protocol is documented in `PROTOCOL.md`.
+- WebSocket protocol is documented in [docs/protocol.md](../../docs/protocol.md).
 - `snapshot`/`update` include `protocol_version`.

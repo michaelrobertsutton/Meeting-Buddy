@@ -111,7 +111,7 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 - ChatGPT Plus OAuth uses `chatgpt.com/backend-api/codex/responses`, NOT `api.openai.com/v1`
 
 ## Feature Roadmap
-See `ROADMAP.md` (and GitHub Issues/labels) for the roadmap and current work queue.
+See [docs/roadmap.md](docs/roadmap.md) (and GitHub Issues/labels) for the roadmap and current work queue.
 
 High-level status:
 - ✅ Phases **G–J** implemented
