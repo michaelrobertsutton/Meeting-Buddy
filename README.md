@@ -141,6 +141,8 @@ python -m backend.main
 cd ui && npm run tauri dev
 ```
 
+Tip: Settings now opens in a **separate Settings window** (Cmd+,) with sidebar navigation.
+
 Click the gear icon in the overlay to:
 1. **Set your OpenAI API key** (or use OAuth with ChatGPT Plus) — required for synthesis
 2. **Create a project** and switch to it
@@ -186,7 +188,9 @@ python -m ingest list-docs --project "my-project"
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd+Shift+M` | Toggle overlay visibility |
+| `Option+Space` | Toggle HUD visibility |
+| `Cmd+,` | Open Settings |
+| `Cmd+K` | Clear Session (UI reset) |
 | `Cmd+Shift+P` | Pin/unpin output (freeze while you speak) |
 
 ## Configuration
