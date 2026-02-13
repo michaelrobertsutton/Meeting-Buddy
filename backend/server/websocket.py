@@ -669,17 +669,34 @@ class TranscriptWebSocket:
             current_version = self.buffer.get_version()
             transcript_changed = current_version != last_version
 
-            if transcript_changed and self._extractor:
-                self._extractor.update()
+            if transcript_changed:
+                logger.debug("[WebSocket] Transcript changed: version %d -> %d", last_version, current_version)
+                if self._extractor:
+                    logger.debug("[WebSocket] Calling extractor.update()")
+                    self._extractor.update()
+                else:
+                    logger.warning("[WebSocket] Transcript changed but no extractor available")
 
             question = self._extractor.current_question if self._extractor else None
             question_changed = question != self._last_question
+            
+            if question_changed:
+                logger.info("[WebSocket] Question changed: '%s' -> '%s'", self._last_question, question)
+            
             self._last_question = question
 
             if question_changed and question and self._synthesis_engine:
                 # Only auto-trigger synthesis when not in manual mode
                 if not self._synthesis_in_flight and self._extractor and self._extractor._manual_question is None:
+                    logger.info("[WebSocket] Triggering synthesis for question: %s", question)
                     asyncio.create_task(self._run_synthesis(question))
+                else:
+                    if self._synthesis_in_flight:
+                        logger.debug("[WebSocket] Synthesis already in flight, skipping")
+                    elif self._extractor and self._extractor._manual_question is not None:
+                        logger.debug("[WebSocket] Manual question override active, skipping auto-synthesis")
+                    else:
+                        logger.debug("[WebSocket] No synthesis engine available")
 
             # Periodic audio health check (every 10 seconds)
             current_time = time.time()
