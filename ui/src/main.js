@@ -131,6 +131,10 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.btnCloseSettings = document.getElementById('btn-close-settings');
     dom.btnLogin = document.getElementById('btn-login');
 
+    // Backend status
+    dom.backendStatus = document.getElementById('backend-status');
+    dom.backendHint = document.getElementById('backend-hint');
+
     // Prep mode
     dom.btnGeneratePrep = document.getElementById('btn-generate-prep');
     dom.prepQuestionInput = document.getElementById('prep-question-input');
@@ -246,6 +250,8 @@ function toggleSettings() {
     dom.btnSettings.classList.toggle('active', state.settingsOpen);
 
     if (state.settingsOpen) {
+        // Ensure backend status is immediately accurate
+        setConnectionStatus(state.connected ? 'connected' : 'disconnected');
         loadSettings();
     }
 }
@@ -957,6 +963,19 @@ function setConnectionStatus(status) {
               ? 'Connecting...'
               : 'Disconnected';
     dom.connectionStatus.className = status;
+
+    // Settings drawer: backend status indicator
+    if (dom.backendStatus) {
+        if (state.connected) {
+            dom.backendStatus.textContent = 'Backend: Connected';
+            dom.backendStatus.className = 'settings-status ok';
+            if (dom.backendHint) dom.backendHint.classList.add('hidden');
+        } else {
+            dom.backendStatus.textContent = 'Backend: Disconnected';
+            dom.backendStatus.className = 'settings-status error';
+            if (dom.backendHint) dom.backendHint.classList.remove('hidden');
+        }
+    }
 
     // Disable login when backend isn't reachable
     if (dom.btnLogin) {

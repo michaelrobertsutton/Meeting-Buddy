@@ -565,6 +565,18 @@ body.pinned #drag-handle {
 .settings-status.ok { color: #66bb6a; }
 .settings-status.error { color: #ef5350; }
 
+.settings-hint {
+    margin-top: 6px;
+    font-size: 11px;
+    color: #666;
+}
+
+.settings-hint code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    font-size: 11px;
+    color: #aaa;
+}
+
 /* Inputs */
 #settings-drawer input[type="text"],
 #settings-drawer input[type="password"] {
