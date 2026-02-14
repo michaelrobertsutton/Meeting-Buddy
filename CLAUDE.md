@@ -166,7 +166,7 @@ Starting to poke at code without a plan wastes tokens and produces nothing.
 
 ## Task Management
 
-Use `tasks/todo.md` and `tasks/lessons.md` (both checked into the repo).
+Use `tasks/todo.md` and `tasks/lessons.md` (local only — `tasks/` is gitignored).
 
 1. **Plan first:** write plan to `tasks/todo.md` with checkable items
 2. **Verify plan:** check in before starting implementation

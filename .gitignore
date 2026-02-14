@@ -50,3 +50,6 @@ native/MeetingBuddySettings/.build/
 .venv_test/
 
 native/MeetingBuddyShell/.build/
+
+# Agent working files (local only)
+tasks/
