@@ -20,11 +20,20 @@ Status labels (pick exactly one):
 - `status:review` — PR open; needs review/merge
 - `status:blocked` — waiting on a dependency or decision
 
+CI label:
+- `ci:run` — triggers a full CI run (see [When to add ci:run](#when-to-add-cirun) below)
+
 Agent/area labels (optional but recommended):
 - `agent:claw` — owned by the OpenClaw agent
 - `area:backend` — backend/server work
 - `area:ui` — UI/Tauri work
 - `area:ingest` — ingestion/retrieval work
+- `area:native` — native SwiftUI/AppKit shell
+
+Phase labels (for batched execution):
+- `phase-A-cleanup` — independent cleanup tasks, safe to run in parallel
+- `phase-B-websocket` — all touch `websocket.py`, must run **serially** in issue-number order
+- `phase-C-testing` — test coverage, depends on A+B completing first
 
 ## Permissions
 
@@ -85,6 +94,10 @@ Some files are likely to be edited by multiple issues (e.g., WebSocket protocol,
 - call it out in the PR description
 - keep changes localized (or split into separate commits) to reduce merge pain
 
+Known hot files:
+- `backend/server/websocket.py` — touched by many issues; check phase labels for serial ordering
+- `ui/src-tauri/src/lib.rs` — sidecar spawn logic, hotkeys, tray menu
+
 ## Review feedback discipline (required)
 
 We use automated PR reviews (Codex) which often leave **inline review threads** (not top-level PR comments).
@@ -102,3 +115,18 @@ If you are an AI agent:
 - set `status:in-progress`
 - open a PR and move to `status:review`
 - add an agent label if available
+- follow the Workflow Orchestration guidelines in [CLAUDE.md](CLAUDE.md)
+- after any correction: record the pattern in `tasks/lessons.md`
+
+## When to add ci:run
+
+Add the `ci:run` label when at least one is true:
+- You touched Tauri/Rust/Swift packaging or process-spawning logic and want a clean end-to-end sanity check.
+- You changed the WebSocket protocol or cross-component contracts (backend ↔ native ↔ UI).
+- You're ready for review/merge and want CI as a final verification gate.
+
+Do **NOT** add `ci:run` when:
+- You're still iterating quickly on small changes (run local checks instead).
+- The change is docs-only or a trivial refactor with no behavior change (unless a reviewer requests).
+
+Manual runs: maintainers can also trigger CI via the Actions "Run workflow" button (`workflow_dispatch`) without adding the label.
