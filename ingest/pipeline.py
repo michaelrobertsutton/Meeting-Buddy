@@ -60,7 +60,10 @@ class IngestPipeline:
             # Keep it short-ish for settings UI
             suggested = (first[:220] + "…") if len(first) > 220 else first
             self._manager.ensure_doc_registry_entry(project_name, doc.title, suggested_description=suggested)
-        except (FileNotFoundError, OSError, ValueError) as e:
+        except (FileNotFoundError, OSError) as e:
+            # Common on first run / when registry metadata doesn't exist yet.
+            logger.debug("Failed to update doc registry for %s: %s", doc.title, e)
+        except ValueError as e:
             logger.warning("Failed to update doc registry for %s: %s", doc.title, e)
         except Exception as e:
             logger.warning("Unexpected error updating doc registry for %s: %s", doc.title, e)
