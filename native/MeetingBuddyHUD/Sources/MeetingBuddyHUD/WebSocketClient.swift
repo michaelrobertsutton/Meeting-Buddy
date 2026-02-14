@@ -316,7 +316,7 @@ final class WebSocketClient: ObservableObject {
             } else {
                 var params: [String: Any] = [:]
                 if !activeQuestion.isEmpty { params["question"] = activeQuestion }
-                if let one = activeAnswer?.one_liner { params["answer"] = one }
+                // Do NOT send a plain-string answer; let the backend pin its structured active_answer.
                 _ = try await sendCommand("pin_answer", params: params)
             }
             await refreshPinned()
