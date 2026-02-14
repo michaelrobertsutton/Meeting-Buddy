@@ -1,6 +1,10 @@
 import SwiftUI
 import AppKit
 
+extension Notification.Name {
+    static let meetingBuddyHUDHide = Notification.Name("MeetingBuddyHUD.Hide")
+}
+
 @main
 struct MeetingBuddyHUDApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -17,6 +21,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let ws = WebSocketClient()
     private let hudController = HUDPanelController()
     private var hotkey: GlobalHotkey?
+    private var hideObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon (menu bar app / accessory)
@@ -30,6 +35,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             ContentView(ws: ws)
         }
 
+        // Toolbar "Hide" button posts this; we hide the panel
+        hideObserver = NotificationCenter.default.addObserver(
+            forName: .meetingBuddyHUDHide,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hudController.hide()
+        }
+
         // Register global hotkey (Alt+Space)
         hotkey = GlobalHotkey { [weak self] in
             self?.toggleHUD()
@@ -38,6 +52,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     func applicationWillTerminate(_ notification: Notification) {
+        if let observer = hideObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
         hotkey?.unregister()
         ws.disconnect()
     }

@@ -11,7 +11,7 @@ struct ContentView: View {
             Divider()
                 .background(AppTheme.glassEdge)
 
-            // Main content area
+            // Main content area (background so it's never blank)
             VStack(spacing: AppTheme.spacing) {
                 // Transcript section
                 TranscriptView(segments: ws.segments)
@@ -26,6 +26,8 @@ struct ContentView: View {
                 }
             }
             .padding(AppTheme.margin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .background(Color.black.opacity(0.12))
 
             Spacer(minLength: 0)
 
@@ -70,6 +72,16 @@ struct ToolbarView: View {
 
             Spacer(minLength: 0)
 
+            // Hide button (Alt+Space also works)
+            Button {
+                NotificationCenter.default.post(name: .meetingBuddyHUDHide, object: nil)
+            } label: {
+                Label("Hide", systemImage: "chevron.down.circle")
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(AppTheme.textSecondary)
+            .help("Hide window (Alt+Space)")
+
             // Search / question input
             TextField("Ask a question…", text: $query)
                 .textFieldStyle(.roundedBorder)
@@ -96,22 +108,32 @@ struct TranscriptView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(segments.enumerated()), id: \.offset) { idx, seg in
-                        Text(seg.text)
+                    if segments.isEmpty {
+                        Text("Listening…")
                             .font(.body)
-                            .foregroundStyle(idx == segments.count - 1 ? AppTheme.textPrimary : AppTheme.textSecondary)
-                            .id(idx)
+                            .foregroundStyle(AppTheme.textSecondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, AppTheme.margin)
+                            .padding(.vertical, 12)
+                    } else {
+                        ForEach(Array(segments.enumerated()), id: \.offset) { idx, seg in
+                            Text(seg.text)
+                                .font(.body)
+                                .foregroundStyle(idx == segments.count - 1 ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                .id(idx)
+                        }
+                        .padding(.horizontal, AppTheme.margin)
                     }
                 }
-                .padding(.horizontal, AppTheme.margin)
             }
             .onChange(of: segments.count) { _ in
+                guard !segments.isEmpty else { return }
                 withAnimation {
                     proxy.scrollTo(segments.count - 1, anchor: .bottom)
                 }
             }
         }
-        .frame(maxHeight: 200)
+        .frame(minHeight: 120, maxHeight: 200)
     }
 }
 
