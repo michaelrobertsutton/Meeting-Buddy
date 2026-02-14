@@ -132,7 +132,8 @@ jobs:
           cd ui/src-tauri
           cargo fmt --check
       - name: Rust clippy (Tauri)
+        env:
+          TAURI_CONFIG: '{"bundle":{"active":false,"externalBin":[]}}'
         run: |
           cd ui/src-tauri
-          export TAURI_CONFIG="$(cat tauri.conf.ci.json)"
           cargo clippy --all-targets --all-features -- -D warnings
