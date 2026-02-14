@@ -16,6 +16,7 @@ final class WebSocketClient: ObservableObject {
     @Published var isPinned: Bool = false
 
     @Published var segments: [TranscriptSegment] = []
+    @Published var lastTranscriptAt: Date? = nil
     @Published var activeQuestion: String = ""
     @Published var oneLiner: String = ""
     @Published var activeAnswer: ActiveAnswer? = nil
@@ -130,7 +131,10 @@ final class WebSocketClient: ObservableObject {
 
         if let msg = try? JSONDecoder().decode(BackendMessage.self, from: data) {
             DispatchQueue.main.async {
-                if let segs = msg.segments { self.segments = segs }
+                if let segs = msg.segments {
+                    self.segments = segs
+                    self.lastTranscriptAt = Date()
+                }
                 self.activeQuestion = msg.active_question ?? self.activeQuestion
                 self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner
                 if let ans = msg.active_answer { self.activeAnswer = ans }
