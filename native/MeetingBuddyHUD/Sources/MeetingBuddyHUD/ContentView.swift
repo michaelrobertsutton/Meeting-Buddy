@@ -40,7 +40,7 @@ struct ContentView: View {
                 isPinned: ws.isPinned
             )
         }
-        .frame(width: AppTheme.windowWidth, height: AppTheme.windowHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fontDesign(.rounded)
     }
 }

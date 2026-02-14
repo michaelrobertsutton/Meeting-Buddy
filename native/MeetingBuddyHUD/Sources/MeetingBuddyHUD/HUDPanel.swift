@@ -1,15 +1,19 @@
 import AppKit
 import SwiftUI
 
-/// Custom NSPanel for the HUD window with proper floating behavior
+/// Custom NSPanel for the HUD window with proper floating behavior.
+/// Uses a standard title bar (no fullSizeContentView) so traffic lights are never clipped
+/// and the content view is strictly below the title bar (no blank/overlap issues).
 final class HUDPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: AppTheme.windowWidth, height: AppTheme.windowHeight),
-            styleMask: [.nonactivatingPanel, .titled, .closable, .miniaturizable, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel, .titled, .closable, .miniaturizable, .resizable],
             backing: .buffered,
             defer: false
         )
+
+        title = "Meeting Buddy"
 
         // Floating panel behavior
         level = .floating
@@ -17,14 +21,12 @@ final class HUDPanel: NSPanel {
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
 
-        // Title bar: transparent so content can show under it, but keep standard traffic lights
-        titlebarAppearsTransparent = true
-        titleVisibility = .hidden
+        // Standard title bar: system draws traffic lights and title; content is only below it
+        titlebarAppearsTransparent = false
+        titleVisibility = .visible
 
-        // Ensure traffic lights and content don't overlap; min size so buttons aren't truncated
         minSize = NSSize(width: 340, height: 400)
 
-        // Background: fully transparent window chrome
         isOpaque = false
         backgroundColor = .clear
     }
@@ -64,9 +66,8 @@ final class HUDPanelController {
                 // Background material
                 VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
 
-                // Content (top padding keeps toolbar below traffic lights)
+                // Content (content view is strictly below title bar; no overlap)
                 content()
-                    .padding(.top, 26)
             }
             .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
             .overlay(
