@@ -77,6 +77,12 @@ final class AudioTapRecorder {
     private var sourceFormat: AVAudioFormat?
     private var tapASBD = AudioStreamBasicDescription()
 
+    // Diagnostics: track callback activity (atomic for thread safety)
+    private var callbackCount: Int64 = 0
+    private var emptyCallbackCount: Int64 = 0
+    private var bytesWritten: Int64 = 0
+    private var diagTimer: DispatchSourceTimer?
+
     // ---------------------------------------------------------------------------
     // Setup
     // ---------------------------------------------------------------------------
@@ -100,6 +106,19 @@ final class AudioTapRecorder {
         log("[AudioCapture] capturing system audio -> stdout "
             + "(16-bit signed LE, 16 kHz, mono)")
         log("[AudioCapture] press Ctrl+C to stop")
+
+        // Periodic diagnostic: log callback activity every 5 seconds
+        let diagTimer = DispatchSource.makeTimerSource(queue: .main)
+        diagTimer.schedule(deadline: .now() + 5, repeating: 5.0)
+        diagTimer.setEventHandler { [weak self] in
+            guard let self = self else { return }
+            let cb = OSAtomicAdd64(0, &self.callbackCount)
+            let empty = OSAtomicAdd64(0, &self.emptyCallbackCount)
+            let bytes = OSAtomicAdd64(0, &self.bytesWritten)
+            log("[AudioCapture] diag: callbacks=\(cb), empty=\(empty), bytesWritten=\(bytes)")
+        }
+        diagTimer.resume()
+        self.diagTimer = diagTimer
     }
 
     func stop() {
@@ -350,10 +369,13 @@ final class AudioTapRecorder {
     // ---------------------------------------------------------------------------
 
     private func handleAudioCallback(_ inputData: UnsafePointer<AudioBufferList>?) {
+        OSAtomicIncrement64(&callbackCount)
+
         guard let inputData = inputData,
               let converter = self.converter,
               let srcFormat = self.sourceFormat,
               let outFmt = self.outputFormat else {
+            OSAtomicIncrement64(&emptyCallbackCount)
             return
         }
 
@@ -361,6 +383,7 @@ final class AudioTapRecorder {
         let firstBuffer = bufferList.mBuffers
 
         guard let data = firstBuffer.mData, firstBuffer.mDataByteSize > 0 else {
+            OSAtomicIncrement64(&emptyCallbackCount)
             return
         }
 
@@ -451,6 +474,7 @@ final class AudioTapRecorder {
             * Int(outFmt.streamDescription.pointee.mBytesPerFrame)
         let rawData = Data(bytes: int16Ptr, count: byteCount)
         FileHandle.standardOutput.write(rawData)
+        OSAtomicIncrement64(&bytesWritten)
     }
 }
 
