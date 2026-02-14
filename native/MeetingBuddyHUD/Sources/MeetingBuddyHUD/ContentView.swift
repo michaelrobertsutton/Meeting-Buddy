@@ -14,7 +14,7 @@ struct ContentView: View {
             // Main content area (background so it's never blank)
             VStack(spacing: AppTheme.spacing) {
                 // Transcript section
-                TranscriptView(segments: ws.segments)
+                TranscriptView(segments: ws.segments, lastSegmentAt: ws.lastTranscriptAt)
 
                 // Synthesis card (when active)
                 if ws.synthesisSearching || !ws.answerPartialText.isEmpty || ws.activeAnswer != nil || ws.synthesisError != nil {
@@ -47,7 +47,7 @@ struct ContentView: View {
                 isPinned: ws.isPinned
             )
         }
-        .frame(width: AppTheme.windowWidth, height: AppTheme.windowHeight)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fontDesign(.rounded)
     }
 }
@@ -200,37 +200,91 @@ struct HUDToolbarView: View {
 
 struct TranscriptView: View {
     let segments: [TranscriptSegment]
+    let lastSegmentAt: Date?
+
+    @State private var now: Date = Date()
+    @State private var listeningPulse: Bool = false
 
     var body: some View {
         ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 4) {
-                    if segments.isEmpty {
-                        Text("Listening…")
-                            .font(.body)
-                            .foregroundStyle(AppTheme.textSecondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(.horizontal, AppTheme.margin)
-                            .padding(.vertical, 12)
-                    } else {
+            ZStack(alignment: .topLeading) {
+                ScrollView {
+                    LazyVStack(alignment: .leading, spacing: 4) {
                         ForEach(Array(segments.enumerated()), id: \.offset) { idx, seg in
                             Text(seg.text)
                                 .font(.body)
-                                .foregroundStyle(idx == segments.count - 1 ? AppTheme.textPrimary : AppTheme.textSecondary)
+                                .foregroundStyle(Color.white.opacity(opacityForIndex(idx, total: segments.count)))
                                 .id(idx)
                         }
                         .padding(.horizontal, AppTheme.margin)
+
+                        // Anchor for autoscroll
+                        Color.clear
+                            .frame(height: 1)
+                            .id("latest")
+                    }
+                    .padding(.top, 10)
+                    .padding(.bottom, 8)
+                }
+                .mask(
+                    LinearGradient(
+                        stops: [
+                            .init(color: .clear, location: 0.0),
+                            .init(color: .black, location: 0.2),
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+                .onChange(of: segments.count) { _ in
+                    withAnimation(.easeOut(duration: 0.2)) {
+                        proxy.scrollTo("latest", anchor: .bottom)
                     }
                 }
-            }
-            .onChange(of: segments.count) { _ in
-                guard !segments.isEmpty else { return }
-                withAnimation {
-                    proxy.scrollTo(segments.count - 1, anchor: .bottom)
+
+                if isIdle {
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(AppTheme.accentBlue)
+                            .frame(width: 6, height: 6)
+                            .scaleEffect(listeningPulse ? 1.0 : 0.6)
+                            .animation(
+                                .easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                                value: listeningPulse
+                            )
+
+                        Text("Listening…")
+                            .font(.caption)
+                            .foregroundStyle(AppTheme.textSecondary)
+                    }
+                    .padding(.horizontal, AppTheme.margin)
+                    .padding(.top, 12)
+                    .onAppear { listeningPulse = true }
+                    .onChange(of: isIdle) { idle in
+                        listeningPulse = idle
+                    }
                 }
             }
         }
         .frame(minHeight: 120, maxHeight: 200)
+        .onReceive(Timer.publish(every: 0.5, on: .main, in: .common).autoconnect()) { now in
+            self.now = now
+        }
+    }
+
+    private var isIdle: Bool {
+        guard !segments.isEmpty else { return true }
+        guard let last = lastSegmentAt else { return true }
+        return now.timeIntervalSince(last) > 4.0
+    }
+
+    private func opacityForIndex(_ index: Int, total: Int) -> Double {
+        guard total > 0 else { return 1.0 }
+        let latest = total - 1
+        if index == latest { return 1.0 }
+        if index == latest - 1 { return 0.75 }
+        if index == latest - 2 { return 0.55 }
+        return 0.40
     }
 }
 
