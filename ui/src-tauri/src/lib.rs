@@ -1,20 +1,14 @@
 use std::sync::Mutex;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
 /// Holds the settings sidecar child process so we can kill it before re-launching.
-
 struct SettingsChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
 /// Holds the native HUD sidecar child process so we can kill it to hide.
-
 struct HudChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
-#[cfg(target_os = "macos")]
-use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
-
 /// Holds the backend sidecar child process so we can kill it on app exit.
-
 struct BackendChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
 #[tauri::command]
@@ -30,7 +24,6 @@ fn dismiss_onboarding() -> Result<(), String> {
 }
 
 /// Open a URL (e.g. System Settings deep link) via macOS `open` command.
-
 /// Used for onboarding "Open System Settings" so it works reliably from native.
 
 #[tauri::command]
@@ -70,7 +63,6 @@ fn check_screen_recording_permission() -> bool {
 }
 
 /// Microphone permission check (optional for onboarding).
-
 /// On macOS we could use AVFoundation; for now return true so we don't block.
 
 #[cfg(target_os = "macos")]
@@ -439,7 +431,7 @@ pub fn run() {
 
                     .menu(&menu)
 
-                    .menu_on_left_click(true)
+                    .show_menu_on_left_click(true)
 
                     .tooltip("Meeting Buddy")
 

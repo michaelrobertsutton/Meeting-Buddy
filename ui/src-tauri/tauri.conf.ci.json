@@ -4,9 +4,9 @@
   "version": "0.1.0",
   "identifier": "com.meetingbuddy.overlay",
   "build": {
-    "frontendDist": "../dist",
-    "beforeBuildCommand": "npm run build-frontend",
-    "beforeDevCommand": "npm run build-frontend"
+    "frontendDist": ".",
+    "beforeBuildCommand": "",
+    "beforeDevCommand": ""
   },
   "app": {
     "withGlobalTauri": true,
