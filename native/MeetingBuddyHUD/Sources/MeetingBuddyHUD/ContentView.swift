@@ -16,16 +16,23 @@ struct ContentView: View {
                 // Transcript section
                 TranscriptView(segments: ws.segments)
 
-                // Answer card (when active)
-                if !ws.oneLiner.isEmpty || ws.synthesisSearching {
-                    AnswerCard(
+                // Synthesis card (when active)
+                if ws.synthesisSearching || !ws.answerPartialText.isEmpty || ws.activeAnswer != nil || ws.synthesisError != nil {
+                    SynthesisCardView(
                         question: ws.activeQuestion,
                         answer: ws.activeAnswer,
-                        searching: ws.synthesisSearching
+                        searching: ws.synthesisSearching,
+                        partialText: ws.answerPartialText,
+                        error: ws.synthesisError
                     )
+                    .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
                 }
             }
             .padding(AppTheme.margin)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.synthesisSearching)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.answerPartialText)
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.activeAnswer?.one_liner ?? "")
+            .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.synthesisError ?? "")
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .background(Color.black.opacity(0.12))
 
@@ -227,59 +234,90 @@ struct TranscriptView: View {
     }
 }
 
-// MARK: - Answer Card
+// MARK: - Synthesis Card
 
-struct AnswerCard: View {
+struct SynthesisCardView: View {
     let question: String
     let answer: ActiveAnswer?
     let searching: Bool
+    let partialText: String
+    let error: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: AppTheme.spacing) {
-            // Question
-            if !question.isEmpty {
-                Text(question)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(AppTheme.accentBlue)
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            Text("DIRECT ANSWER")
+                .font(.caption2)
+                .textCase(.uppercase)
+                .kerning(0.5)
+                .foregroundStyle(AppTheme.accentBlue)
 
-            // Searching indicator
             if searching {
-                HStack(spacing: 6) {
+                HStack(spacing: 8) {
                     ProgressView()
-                        .scaleEffect(0.7)
-                    Text("Searching…")
+                        .tint(AppTheme.accentBlue)
+                    Text("Searching sources…")
                         .font(.caption)
                         .foregroundStyle(AppTheme.textSecondary)
                 }
             }
 
-            // One-liner
-            if let ans = answer, let oneLiner = ans.one_liner, !oneLiner.isEmpty {
-                Text(oneLiner)
+            if let err = error, !err.isEmpty {
+                Text(err)
+                    .font(.body)
+                    .foregroundStyle(Color(hex: "#F44336"))
+            }
+
+            if !partialText.isEmpty {
+                Text(partialText)
+                    .font(.body)
+                    .italic()
+                    .foregroundStyle(AppTheme.accentBlue)
+            }
+
+            if let one = answer?.one_liner, !one.isEmpty {
+                Text(one)
                     .font(.body)
                     .foregroundStyle(AppTheme.textPrimary)
             }
 
-            // Bullets
             if let bullets = answer?.bullets, !bullets.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
+                VStack(alignment: .leading, spacing: 8) {
                     ForEach(bullets, id: \.self) { bullet in
-                        HStack(alignment: .top, spacing: 6) {
-                            Text("•")
+                        HStack(alignment: .top, spacing: 8) {
+                            Image(systemName: "circle.fill")
+                                .font(.system(size: 5, weight: .semibold))
                                 .foregroundStyle(AppTheme.accentBlue)
+                                .padding(.top, 6)
+
                             Text(bullet)
-                                .foregroundStyle(AppTheme.textSecondary)
+                                .font(.body)
+                                .foregroundStyle(AppTheme.textPrimary)
                         }
-                        .font(.callout)
                     }
                 }
             }
         }
-        .padding(AppTheme.margin)
+        .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.black.opacity(0.2))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(.ultraThinMaterial)
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.white.opacity(0.04))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(confidenceColor.opacity(0.6), lineWidth: 1)
+        )
+    }
+
+    private var confidenceColor: Color {
+        let c = answer?.confidence ?? 0
+        if c > 0.6 { return Color(hex: "#4CAF50") }
+        if c >= 0.3 { return Color(hex: "#FFC107") }
+        return Color(hex: "#F44336")
     }
 }
 

@@ -20,6 +20,8 @@ final class WebSocketClient: ObservableObject {
     @Published var oneLiner: String = ""
     @Published var activeAnswer: ActiveAnswer? = nil
     @Published var synthesisSearching: Bool = false
+    @Published var synthesisError: String? = nil
+    @Published var answerPartialText: String = ""
 
     // Projects
     @Published var availableProjects: [String] = []
@@ -130,10 +132,42 @@ final class WebSocketClient: ObservableObject {
 
         if let msg = try? JSONDecoder().decode(BackendMessage.self, from: data) {
             DispatchQueue.main.async {
-                if let segs = msg.segments { self.segments = segs }
+                // Transcript
+                if let segs = msg.segments {
+                    self.segments = segs
+                }
+
+                // Synthesis / answer
+                if let t = msg.type {
+                    switch t {
+                    case "synthesis_searching":
+                        self.synthesisSearching = true
+                        self.synthesisError = nil
+                        self.answerPartialText = ""
+                    case "synthesis_error":
+                        self.synthesisSearching = false
+                        self.synthesisError = msg.error ?? "Synthesis error"
+                        self.answerPartialText = ""
+                    case "answer_partial":
+                        if let partial = msg.partial_text {
+                            self.answerPartialText = partial
+                        }
+                    case "answer_update":
+                        self.synthesisSearching = false
+                        self.synthesisError = nil
+                        self.answerPartialText = ""
+                    case "pinned_update":
+                        break
+                    default:
+                        break
+                    }
+                }
+
                 self.activeQuestion = msg.active_question ?? self.activeQuestion
                 self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner
                 if let ans = msg.active_answer { self.activeAnswer = ans }
+
+                // Some snapshots include synthesis_searching as a boolean.
                 if let searching = msg.synthesis_searching { self.synthesisSearching = searching }
 
                 if let pinned = msg.pinned {
