@@ -129,6 +129,8 @@ class TranscriptWebSocket:
             "list_docs": self._cmd_list_docs,
             "ingest_files": self._cmd_ingest_files,
             "delete_doc": self._cmd_delete_doc,
+            "get_doc_meta": self._cmd_get_doc_meta,
+            "update_doc_meta": self._cmd_update_doc_meta,
             "start_login": self._cmd_start_login,
             "login_status": self._cmd_login_status,
             "logout": self._cmd_logout,
@@ -357,6 +359,42 @@ class TranscriptWebSocket:
         self._reload_retriever(active)
 
         return {"deleted_chunks": deleted, "docs": store.list_documents()}
+
+    async def _cmd_get_doc_meta(self, params: dict) -> dict:
+        """Return doc_registry metadata for a given doc title."""
+        title = (params.get("title") or "").strip()
+        if not title:
+            raise ValueError("title is required")
+
+        active = self._settings_manager.get_active_project() if self._settings_manager else ""
+        if not active or not self._project_manager:
+            raise RuntimeError("No active project")
+
+        reg = self._project_manager.get_doc_registry(active)
+        entry = reg.get(title) if isinstance(reg, dict) else None
+        if not isinstance(entry, dict):
+            entry = {"description": "", "priority": "normal"}
+        return {"title": title, "meta": entry}
+
+    async def _cmd_update_doc_meta(self, params: dict) -> dict:
+        """Update doc_registry metadata for a given doc title."""
+        title = (params.get("title") or "").strip()
+        if not title:
+            raise ValueError("title is required")
+
+        active = self._settings_manager.get_active_project() if self._settings_manager else ""
+        if not active or not self._project_manager:
+            raise RuntimeError("No active project")
+
+        description = params.get("description")
+        priority = params.get("priority")
+        entry = self._project_manager.update_doc_meta(
+            active,
+            doc_title=title,
+            description=description,
+            priority=priority,
+        )
+        return {"title": title, "meta": entry}
 
     # --- OAuth login commands ---
 
