@@ -247,9 +247,8 @@ Settings like API key and active project persist in `~/.meeting-buddy/config.jso
 
 **Cannot connect to the server (ws://localhost:8765)**
 - The "server" is the local Python backend. If nothing is listening on `localhost:8765`, the backend did not start.
-- **Bundled app**: launch **Meeting Buddy** from Applications (this starts the backend + tray). Then open HUD/Settings.
-- **Dev**: start the backend manually: `source .venv/bin/activate && python -m backend.main`
-- If you started the native HUD directly (`swift run`), it will try a best-effort backend launch, but the reliable path is running the backend yourself.
+- **Bundled app**: Launch **Meeting Buddy** from Applications (this starts the backend + tray). Then open HUD/Settings. If it still fails, the bundle may not find a Python venv (e.g. copy `.venv` to `~/.meeting-buddy/venv` or see the build docs for bundling a venv).
+- **Dev**: Start the backend first in a separate terminal: `source .venv/bin/activate && python -m backend.main`, then run the UI with `cd ui && npm run tauri dev`. If you started the native HUD directly (`swift run`), the reliable path is still running the backend yourself.
 
 **Transcription is slow**
 - Switch to a smaller model: `model_size="tiny.en"` in `backend/config.py`
