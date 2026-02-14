@@ -1,4 +1,5 @@
 import SwiftUI
+import MeetingBuddyProtocol
 
 struct ContentView: View {
     @ObservedObject var ws: WebSocketClient
@@ -210,7 +211,7 @@ struct TranscriptView: View {
             ZStack(alignment: .topLeading) {
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 4) {
-                        ForEach(Array(segments.enumerated()), id: \.offset) { idx, seg in
+                        ForEach(Array(segments.enumerated()), id: \.0) { idx, seg in
                             Text(seg.text)
                                 .font(.body)
                                 .foregroundStyle(Color.white.opacity(opacityForIndex(idx, total: segments.count)))

@@ -1,4 +1,5 @@
 import SwiftUI
+import MeetingBuddyProtocol
 
 struct ContentView: View {
     @ObservedObject var ws: WebSocketClient

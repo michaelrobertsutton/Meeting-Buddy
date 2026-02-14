@@ -1,4 +1,5 @@
 import Foundation
+import MeetingBuddyProtocol
 
 /// Async/await WebSocket client backed by URLSessionWebSocketTask.
 actor WebSocketClient {

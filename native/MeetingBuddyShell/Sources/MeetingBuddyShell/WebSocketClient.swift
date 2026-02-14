@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import MeetingBuddyProtocol
 
 final class WebSocketClient: ObservableObject {
     @Published var connected: Bool = false
