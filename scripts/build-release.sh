@@ -5,19 +5,23 @@ set -euo pipefail
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 TAURI_DIR="$REPO/ui/src-tauri"
 
-echo "==> [1/4] Build AudioCapture"
+echo "==> [1/5] Build AudioCapture"
 cd "$REPO/audio-capture" && swift build -c release
 cp .build/release/AudioCapture "$TAURI_DIR/AudioCapture-aarch64-apple-darwin"
 
-echo "==> [2/4] Build MeetingBuddySettings"
+echo "==> [2/5] Build MeetingBuddyHUD"
+cd "$REPO/native/MeetingBuddyHUD" && swift build -c release
+cp .build/release/MeetingBuddyHUD "$TAURI_DIR/MeetingBuddyHUD-aarch64-apple-darwin"
+
+echo "==> [3/5] Build MeetingBuddySettings"
 cd "$REPO/native/MeetingBuddySettings" && swift build -c release
 cp .build/release/MeetingBuddySettings "$TAURI_DIR/MeetingBuddySettings-aarch64-apple-darwin"
 
-echo "==> [3/4] Tauri build"
+echo "==> [4/5] Tauri build"
 cd "$REPO/ui" && npm ci && npm run tauri build
 
 APP="$TAURI_DIR/target/release/bundle/macos/Meeting Buddy.app"
-echo "==> [4/4] App: $APP"
+echo "==> [5/5] App: $APP"
 
 # Optional: bundle backend source into .app Resources (for PYTHONPATH when using Resources/venv)
 RESOURCES="$APP/Contents/Resources/src"

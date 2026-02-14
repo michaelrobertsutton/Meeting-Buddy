@@ -217,6 +217,11 @@ Settings like API key and active project persist in `~/.meeting-buddy/config.jso
 - Verify audio is actually playing (check system volume)
 - Try restarting the app after granting permissions
 
+**Cannot connect to the server**
+- The Settings window and overlay talk to the backend at `ws://localhost:8765`. If you see "Cannot connect to the server", the backend is not running.
+- **Bundled app**: The app starts the backend automatically when you launch Meeting Buddy. If it still fails, the bundle may not find a Python venv (e.g. copy `.venv` to `~/.meeting-buddy/venv` or see the build docs for bundling a venv).
+- **Development**: Start the backend first in a separate terminal: `source .venv/bin/activate && python -m backend.main`, then run the UI with `cd ui && npm run tauri dev`.
+
 **Transcription is slow**
 - Switch to a smaller model: `model_size="tiny.en"` in `backend/config.py`
 

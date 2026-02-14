@@ -117,8 +117,7 @@ class SettingsStore: ObservableObject {
             let data = try await sendCommand("get_settings")
             applySettings(data)
         } catch {
-            // Treat as fatal: settings are required for the window to function.
-            errorMessage = error.localizedDescription
+            errorMessage = Self.friendlyConnectionError(error)
         }
     }
 
@@ -279,5 +278,21 @@ class SettingsStore: ObservableObject {
             indexed: indexed,
             priority: priority
         )
+    }
+
+    /// User-friendly message when the backend at localhost:8765 is unreachable.
+    private static func friendlyConnectionError(_ error: Error) -> String {
+        let ns = error as NSError
+        if ns.domain == NSURLErrorDomain {
+            switch ns.code {
+            case NSURLErrorCannotConnectToHost, NSURLErrorConnectionRefused, NSURLErrorTimedOut:
+                return "Cannot connect to the backend (localhost:8765). Make sure the Meeting Buddy app is running so the backend starts, or in development run: python -m backend.main"
+            case NSURLErrorNotConnectedToInternet:
+                return "No network. The backend runs locally at localhost:8765 — check that Meeting Buddy (or the backend) is running."
+            default:
+                break
+            }
+        }
+        return error.localizedDescription
     }
 }
