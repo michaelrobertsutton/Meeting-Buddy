@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 
@@ -136,7 +137,9 @@ pub fn run() {
                                         match event {
                                             CommandEvent::Stdout(line) => {
                                                 let s = String::from_utf8_lossy(&line);
-
+                                                if s.contains("MEETING_BUDDY_READY") {
+                                                    let _ = app_handle_clone.emit("backend-ready", ());
+                                                }
                                                 log::info!("[backend] {}", s.trim());
                                             }
 
@@ -157,17 +160,14 @@ pub fn run() {
 
                                             CommandEvent::Terminated(payload) => {
                                                 log::warn!(
-
                                                     "[backend] terminated (code={:?}, signal={:?})",
-
                                                     payload.code,
-
                                                     payload.signal
-
                                                 );
-
-                                                // TODO: surface backend termination state to native HUD
-
+                                                let _ = app_handle_clone.emit(
+                                                    "backend-terminated",
+                                                    (payload.code, payload.signal),
+                                                );
                                                 // Optional restart: try once after short delay (let port release)
 
                                                 let app_handle_restart = app_handle_clone.clone();
@@ -196,18 +196,17 @@ pub fn run() {
                                                                         match event {
                                                                             CommandEvent::Stdout(line) => {
                                                                                 let s = String::from_utf8_lossy(&line);
-
+                                                                                if s.contains("MEETING_BUDDY_READY") {
+                                                                                    let _ = _app_handle_drain.emit("backend-ready", ());
+                                                                                }
                                                                                 log::info!("[backend] {}", s.trim());
                                                                             }
 
                                                                             CommandEvent::Stderr(line) => {
                                                                                 let s = String::from_utf8_lossy(&line);
-
                                                                                 let text = s.trim();
-
                                                                                 if text.contains("ERROR") || text.contains("error:") {
                                                                                     log::error!("[backend:err] {}", text);
-
                                                                                 } else {
                                                                                     log::info!("[backend:err] {}", text);
                                                                                 }
@@ -215,17 +214,14 @@ pub fn run() {
 
                                                                             CommandEvent::Terminated(payload) => {
                                                                                 log::warn!(
-
                                                                                     "[backend] terminated again (code={:?}, signal={:?})",
-
                                                                                     payload.code,
-
                                                                                     payload.signal
-
                                                                                 );
-
-                                                                                // TODO: surface backend termination state to native HUD
-
+                                                                                let _ = _app_handle_drain.emit(
+                                                                                    "backend-terminated",
+                                                                                    (payload.code, payload.signal),
+                                                                                );
                                                                                 break;
                                                                             }
 

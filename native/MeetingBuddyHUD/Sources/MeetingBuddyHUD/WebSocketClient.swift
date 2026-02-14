@@ -89,8 +89,9 @@ final class WebSocketClient: ObservableObject {
     private func scheduleReconnect() {
         reconnectWorkItem?.cancel()
 
-        reconnectAttempt = min(reconnectAttempt + 1, 6)
-        let delay = min(pow(2.0, Double(reconnectAttempt)) * 0.25, 8.0)
+        // Backend can take 30+ s to load models; cap at 60s delay, allow many retries
+        reconnectAttempt = min(reconnectAttempt + 1, 12)
+        let delay = min(pow(2.0, Double(reconnectAttempt)) * 0.5, 60.0)
 
         let item = DispatchWorkItem { [weak self] in
             DispatchQueue.main.async {

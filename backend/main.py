@@ -190,6 +190,8 @@ def main() -> None:
 
     async def run() -> None:
         await ws_server.start()
+        # Sentinel for Tauri: backend is listening and ready for connections.
+        print("MEETING_BUDDY_READY", flush=True)
         await shutdown_event.wait()
         await ws_server.stop()
 

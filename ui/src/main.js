@@ -26,7 +26,7 @@ const state = {
 
 const WS_URL = 'ws://localhost:8765';
 const RECONNECT_DELAY_MS = 2000;
-const MAX_RECONNECT_DELAY_MS = 30000;
+const MAX_RECONNECT_DELAY_MS = 60000; // Backend can take 30+ s to load models
 
 // --- Command request/response ---
 let _cmdId = 0;
@@ -52,7 +52,7 @@ function sendCommand(command, params = {}) {
     });
 }
 
-async function ensureConnected(timeoutMs = 4000) {
+async function ensureConnected(timeoutMs = 60000) {
     // If already open, done
     if (state.ws && state.ws.readyState === WebSocket.OPEN) return;
 
