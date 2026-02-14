@@ -35,6 +35,24 @@ Meeting Buddy requires **Screen Recording** (and optionally Microphone) on macOS
 
 When adding or changing permission requirements, update both the Settings Permissions view and the README.
 
+## CI policy (personal repo)
+
+GitHub Actions is **opt-in** for PRs to avoid paid CI minutes.
+
+- CI runs automatically on `push` to `main`
+- CI runs on PRs **only** when the PR has label: `ci:run`
+- CI can also be triggered manually via **Actions → CI → Run workflow** (workflow_dispatch)
+
+### When to add `ci:run`
+Add `ci:run` when at least one is true:
+- You touched Tauri/Rust/Swift packaging or process-spawning logic
+- You changed the WebSocket protocol or cross-component contracts (backend ↔ native ↔ UI)
+- You’re ready for review/merge and want CI as the final verification gate
+
+Avoid `ci:run` when:
+- You’re iterating quickly on small changes (run local checks instead)
+- The change is docs-only or a trivial refactor (unless a reviewer requests CI)
+
 ## Local dev quality tools (recommended)
 
 We use `ruff` + `pytest` in CI. For the best experience locally, install pre-commit:

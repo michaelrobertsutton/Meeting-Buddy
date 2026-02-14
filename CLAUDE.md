@@ -130,6 +130,16 @@ Starting to poke at code without a plan wastes tokens and produces nothing.
 
 **Source of truth:** [CONTRIBUTING.md](CONTRIBUTING.md). When working on a GitHub issue:
 
+### CI (personal repo): opt-in for PRs
+GitHub Actions CI is **opt-in** on PRs to avoid paid minutes.
+
+- Add label `ci:run` to run CI on a PR, or trigger manually via **Actions → CI → Run workflow**
+- `push` to `main` still runs CI automatically
+
+(See CONTRIBUTING.md for guidance on when to apply `ci:run`.)
+
+
+
 1. **Before starting:** Set issue to `status:in-progress` and assign (or add agent label e.g. `agent:claw`).
 2. **One issue per branch:** Use branch name like `feature/119-transcript-engine` or `fix/118-foo`.
 3. **When opening a PR:** Move the issue to `status:review` (remove `status:ready` or `status:in-progress`, add `status:review`). PR title/body should reference and close the issue (e.g. "Closes #119").
