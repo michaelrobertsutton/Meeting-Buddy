@@ -187,7 +187,7 @@ pub fn run() {
 
                                                                 log::info!("Backend sidecar restarted after crash");
 
-                                                                let app_handle_drain = app_handle_restart.clone();
+                                                                let _app_handle_drain = app_handle_restart.clone();
 
                                                                 tauri::async_runtime::spawn(async move {
                                                                     use tauri_plugin_shell::process::CommandEvent;
@@ -342,29 +342,23 @@ pub fn run() {
 
                             if shortcut == &toggle_shortcut {
                                 // Toggle HUD sidecar visibility.
-
                                 // For now, we model "hide" as kill and "show" as spawn.
-
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
+                                    let had_child = state.0.lock().unwrap().take();
+                                    if let Some(old_child) = had_child {
                                         let _ = old_child.kill();
-
                                     } else {
                                         match app_handle.shell().sidecar("MeetingBuddyHUD") {
                                             Ok(cmd) => match cmd.spawn() {
                                                 Ok((_rx, child)) => {
                                                     *state.0.lock().unwrap() = Some(child);
                                                 }
-
                                                 Err(e) => log::error!("[hud] Failed to spawn: {e}"),
-
                                             },
-
                                             Err(e) => log::error!("[hud] Sidecar not found: {e}"),
                                         }
                                     }
                                 }
-
                             } else if shortcut == &settings_shortcut {
                                 // Launch native SwiftUI settings app as a sidecar
 
@@ -423,7 +417,7 @@ pub fn run() {
 
                 let menu = Menu::with_items(app, &[&toggle_item, &settings_item, &export_item, &quit_item])?;
 
-                let app_handle = app.handle().clone();
+                let _app_handle = app.handle().clone();
 
                 let _tray = TrayIconBuilder::new()
 
@@ -439,26 +433,22 @@ pub fn run() {
                         match event.id.as_ref() {
                             "toggle_hud" => {
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
+                                    let had_child = state.0.lock().unwrap().take();
+                                    if let Some(old_child) = had_child {
                                         let _ = old_child.kill();
-
                                     } else {
                                         match app_handle.shell().sidecar("MeetingBuddyHUD") {
                                             Ok(cmd) => match cmd.spawn() {
                                                 Ok((_rx, child)) => {
                                                     *state.0.lock().unwrap() = Some(child);
                                                 }
-
                                                 Err(e) => log::error!("[hud] Failed to spawn: {e}"),
-
                                             },
-
                                             Err(e) => log::error!("[hud] Sidecar not found: {e}"),
                                         }
                                     }
                                 }
                             }
-
                             "open_settings" => {
                                 // Kill any existing settings sidecar, then spawn a fresh one
 
