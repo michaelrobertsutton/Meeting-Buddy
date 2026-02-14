@@ -110,6 +110,17 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 - `macOSPrivateApi` is NOT a valid top-level key in Tauri 2.x config
 - ChatGPT Plus OAuth uses `chatgpt.com/backend-api/codex/responses`, NOT `api.openai.com/v1`
 
+## MANDATORY: Always plan before working
+
+**Never start coding without a crystal-clear plan first.** This is a hard rule, no exceptions.
+
+1. Read the GitHub issue
+2. Explore the relevant code
+3. Write out the full implementation plan (files to change, approach, edge cases)
+4. Get user confirmation before touching any code
+
+Starting to poke at code without a plan wastes tokens and produces nothing.
+
 ## GitHub issue + PR workflow (required)
 
 **Source of truth:** [CONTRIBUTING.md](CONTRIBUTING.md). When working on a GitHub issue:

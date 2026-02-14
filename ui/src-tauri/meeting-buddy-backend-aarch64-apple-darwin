@@ -3,6 +3,27 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
+# --- Project root (must resolve before venv lookup) ---
+if [ -z "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
+    if [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
+        APP_BUNDLE="$SCRIPT_DIR/../.."
+        CANDIDATE="$(cd "$APP_BUNDLE/../../../../../../.." 2>/dev/null && pwd)" || CANDIDATE=""
+        if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE/backend/main.py" ]; then
+            export MEETINGBUDDY_PROJECT_ROOT="$CANDIDATE"
+        fi
+    else
+        # Dev mode: walk up from SCRIPT_DIR until we find backend/main.py
+        WALK="$SCRIPT_DIR"
+        for _ in 1 2 3 4 5 6; do
+            WALK="$(cd "$WALK/.." && pwd)"
+            if [ -f "$WALK/backend/main.py" ]; then
+                export MEETINGBUDDY_PROJECT_ROOT="$WALK"
+                break
+            fi
+        done
+    fi
+fi
+
 # --- Venv resolution (priority order for distribution + dev) ---
 if [ -n "${MEETINGBUDDY_VENV:-}" ] && [ -d "$MEETINGBUDDY_VENV" ]; then
     VENV="$MEETINGBUDDY_VENV"
@@ -25,19 +46,6 @@ if [ -n "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
     export PYTHONPATH="${MEETINGBUDDY_PROJECT_ROOT}:${PYTHONPATH:-}"
 elif [ -d "$SCRIPT_DIR/../Resources/src" ]; then
     export PYTHONPATH="$SCRIPT_DIR/../Resources/src:${PYTHONPATH:-}"
-fi
-
-# --- Project root (for backend; optional when using bundled Resources) ---
-if [ -z "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
-    if [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
-        APP_BUNDLE="$SCRIPT_DIR/../.."
-        CANDIDATE="$(cd "$APP_BUNDLE/../../../../../../.." 2>/dev/null && pwd)" || CANDIDATE=""
-        if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE/backend/main.py" ]; then
-            export MEETINGBUDDY_PROJECT_ROOT="$CANDIDATE"
-        fi
-    else
-        export MEETINGBUDDY_PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-    fi
 fi
 
 # --- AudioCapture binary ---

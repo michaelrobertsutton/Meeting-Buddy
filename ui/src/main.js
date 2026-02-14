@@ -1132,7 +1132,8 @@ function connectWebSocket() {
     };
 
     ws.onclose = () => {
-        setConnectionStatus('disconnected');
+        // Show "Connecting..." while we will retry (reconnecting), not "Disconnected"
+        setConnectionStatus('reconnecting');
         state.connected = false;
         state.ws = null;
 
@@ -1367,13 +1368,14 @@ function renderTranscript() {
 
 function setConnectionStatus(status) {
     state.connected = status === 'connected';
+    const isConnecting = status === 'connecting' || status === 'reconnecting';
     dom.connectionStatus.textContent =
         status === 'connected'
             ? 'Connected'
-            : status === 'connecting'
+            : isConnecting
               ? 'Connecting...'
               : 'Disconnected';
-    dom.connectionStatus.className = status;
+    dom.connectionStatus.className = status === 'reconnecting' ? 'connecting' : status;
 
     // Settings drawer: backend status indicator
     if (dom.backendStatus) {
@@ -1381,7 +1383,7 @@ function setConnectionStatus(status) {
             dom.backendStatus.textContent = 'Backend: Connected';
             dom.backendStatus.className = 'settings-status ok';
             if (dom.backendHint) dom.backendHint.classList.add('hidden');
-        } else if (status === 'connecting') {
+        } else if (isConnecting) {
             dom.backendStatus.textContent = 'Backend: Starting...';
             dom.backendStatus.className = 'settings-status';
             if (dom.backendHint) dom.backendHint.classList.add('hidden');
