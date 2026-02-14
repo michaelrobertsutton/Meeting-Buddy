@@ -5,18 +5,10 @@ from dataclasses import dataclass, field
 
 @dataclass
 class AudioConfig:
-    device_name: str = "BlackHole"
-    sample_rate: int = 48000  # BlackHole native rate
-    target_sample_rate: int = 16000  # Whisper requires 16kHz
-    channels: int = 2  # BlackHole 2ch
+    target_sample_rate: int = 16000  # Whisper requires 16kHz (SCK outputs 16kHz)
     block_duration_ms: int = 100  # Frame size in ms
     queue_maxsize: int = 300  # ~30s buffer at 100ms/frame
     capture_binary: str = "audio-capture/.build/release/AudioCapture"
-
-    @property
-    def block_size(self) -> int:
-        """Number of samples per frame at native sample rate."""
-        return int(self.sample_rate * self.block_duration_ms / 1000)
 
     @property
     def target_block_size(self) -> int:

@@ -5,14 +5,21 @@ import logging
 import threading
 import time
 from collections import deque
-from typing import Callable
+from typing import Callable, Protocol
 
 import numpy as np
 
 from backend.asr.engine import ASREngine
 from backend.asr.vad import VADFilter
-from backend.audio.capture import AudioCapture
 from backend.config import AudioConfig, StreamingConfig
+
+
+class AudioSource(Protocol):
+    """Protocol for audio capture (e.g. SCKCapture). Duck-typed by read_frame/start/stop."""
+
+    def read_frame(self, timeout: float = 1.0) -> np.ndarray | None: ...
+    def start(self) -> None: ...
+    def stop(self) -> None: ...
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +40,7 @@ class StreamingASR:
 
     def __init__(
         self,
-        capture: AudioCapture,
+        capture: AudioSource,
         vad: VADFilter,
         engine: ASREngine,
         audio_config: AudioConfig,
