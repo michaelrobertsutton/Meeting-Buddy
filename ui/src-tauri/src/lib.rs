@@ -137,6 +137,55 @@ pub fn run() {
                                                 if let Some(window) = app_handle_clone.get_webview_window("overlay") {
                                                     let _ = window.emit("backend-terminated", payload.code);
                                                 }
+                                                // Optional restart: try once after short delay (let port release)
+                                                let app_handle_restart = app_handle_clone.clone();
+                                                tauri::async_runtime::spawn(async move {
+                                                    let _ = tauri::async_runtime::spawn_blocking(|| {
+                                                        std::thread::sleep(std::time::Duration::from_millis(500));
+                                                    })
+                                                    .await;
+                                                    if let Ok(cmd) = app_handle_restart.shell().sidecar("meeting-buddy-backend") {
+                                                        if let Ok((mut rx2, child2)) = cmd.spawn() {
+                                                            if let Some(backend_state) = app_handle_restart.try_state::<BackendChild>() {
+                                                                *backend_state.0.lock().unwrap() = Some(child2);
+                                                                log::info!("Backend sidecar restarted after crash");
+                                                                let app_handle_drain = app_handle_restart.clone();
+                                                                tauri::async_runtime::spawn(async move {
+                                                                    use tauri_plugin_shell::process::CommandEvent;
+                                                                    while let Some(event) = rx2.recv().await {
+                                                                        match event {
+                                                                            CommandEvent::Stdout(line) => {
+                                                                                let s = String::from_utf8_lossy(&line);
+                                                                                log::info!("[backend] {}", s.trim());
+                                                                            }
+                                                                            CommandEvent::Stderr(line) => {
+                                                                                let s = String::from_utf8_lossy(&line);
+                                                                                let text = s.trim();
+                                                                                if text.contains("ERROR") || text.contains("error:") {
+                                                                                    log::error!("[backend:err] {}", text);
+                                                                                } else {
+                                                                                    log::info!("[backend:err] {}", text);
+                                                                                }
+                                                                            }
+                                                                            CommandEvent::Terminated(payload) => {
+                                                                                log::warn!(
+                                                                                    "[backend] terminated again (code={:?}, signal={:?})",
+                                                                                    payload.code,
+                                                                                    payload.signal
+                                                                                );
+                                                                                if let Some(window) = app_handle_drain.get_webview_window("overlay") {
+                                                                                    let _ = window.emit("backend-terminated", payload.code);
+                                                                                }
+                                                                                break;
+                                                                            }
+                                                                            _ => {}
+                                                                        }
+                                                                    }
+                                                                });
+                                                            }
+                                                        }
+                                                    }
+                                                });
                                                 break;
                                             }
                                             _ => {}
