@@ -2,8 +2,18 @@ import Foundation
 import Combine
 
 final class WebSocketClient: ObservableObject {
-    @Published var connected: Bool = false
+
+    enum ConnectionState: Equatable {
+        case connected
+        case connecting
+        case disconnected
+    }
+
+    @Published var connectionState: ConnectionState = .connecting
     @Published var lastError: String? = nil
+
+    // UI state
+    @Published var isPinned: Bool = false
 
     @Published var segments: [TranscriptSegment] = []
     @Published var activeQuestion: String = ""
@@ -40,7 +50,7 @@ final class WebSocketClient: ObservableObject {
         task.resume()
 
         DispatchQueue.main.async {
-            self.connected = false
+            self.connectionState = .connecting
             self.lastError = nil
         }
 
@@ -55,7 +65,7 @@ final class WebSocketClient: ObservableObject {
         task = nil
 
         DispatchQueue.main.async {
-            self.connected = false
+            self.connectionState = .disconnected
         }
     }
 
@@ -66,6 +76,9 @@ final class WebSocketClient: ObservableObject {
         let delay = min(pow(2.0, Double(reconnectAttempt)) * 0.25, 8.0)
 
         let item = DispatchWorkItem { [weak self] in
+            DispatchQueue.main.async {
+                self?.connectionState = .connecting
+            }
             self?.connect()
         }
         reconnectWorkItem = item
@@ -80,15 +93,15 @@ final class WebSocketClient: ObservableObject {
             switch result {
             case .failure(let err):
                 DispatchQueue.main.async {
-                    self.connected = false
+                    self.connectionState = .disconnected
                     self.lastError = err.localizedDescription
                 }
                 self.scheduleReconnect()
 
             case .success(let message):
                 DispatchQueue.main.async {
-                    if self.connected == false {
-                        self.connected = true
+                    if self.connectionState != .connected {
+                        self.connectionState = .connected
                         self.reconnectAttempt = 0
                         Task { await self.bootstrapSettings() }
                     }
@@ -119,6 +132,11 @@ final class WebSocketClient: ObservableObject {
                 self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner
                 if let ans = msg.active_answer { self.activeAnswer = ans }
                 if let searching = msg.synthesis_searching { self.synthesisSearching = searching }
+
+                // "Pinned" indicator: treat as "has any pinned answers"
+                if let pinned = msg.pinned {
+                    self.isPinned = !pinned.isEmpty
+                }
             }
             return
         }
