@@ -85,6 +85,16 @@ Some files are likely to be edited by multiple issues (e.g., WebSocket protocol,
 - call it out in the PR description
 - keep changes localized (or split into separate commits) to reduce merge pain
 
+## Review feedback discipline (required)
+
+We use automated PR reviews (Codex) which often leave **inline review threads** (not top-level PR comments).
+
+Before merging any PR, reviewers/agents must check:
+- Top-level PR comments
+- Inline review threads
+
+Tip (CLI): use the GraphQL `reviewThreads` query to avoid missing inline feedback.
+
 ## Claude / other agents
 
 If you are an AI agent:

@@ -21,15 +21,15 @@ All audio and transcript data stays on your device. Only the active question + r
 - **Session export** — export transcripts and Q&A history as Markdown or JSON
 
 ### UI & Controls
-- **Always-on-top overlay** — Tauri window with dark theme, hotkeys, pin/unpin
-- **Settings panel** — manage API key (or OAuth), projects, and document ingestion from the UI
-- **Question history** — ranked list of detected questions with staleness indicators
+- **Native macOS HUD** — SwiftUI/AppKit `NSPanel` with real translucency (MeetingBuddyHUD)
+- **Tauri process manager** — tray + global shortcuts; spawns the HUD + Settings sidecars
+- **Settings panel** — native SwiftUI settings app for API key/OAuth, projects, docs, permissions
 
 ## Prerequisites
 
 - macOS 14+ (Apple Silicon recommended)
 - Python 3.9+ with venv
-- Rust (for Tauri UI): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- Rust (for Tauri process manager / bundling): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
 - **Screen Recording permission**:
   - **Bundled app**: Grant permission to "Meeting Buddy" (System Settings > Privacy & Security > Screen Recording)
   - **Development mode**: Grant permission to Terminal.app (System Settings > Privacy & Security > Screen Recording)
@@ -115,7 +115,7 @@ rm -rf "/Applications/Meeting Buddy.app"
 cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
 ```
 
-**Note:** The bundled app includes the Tauri UI overlay, Python backend as a sidecar, and AudioCapture Swift binary. The app bundle expects to find the project's `.venv` directory at runtime.
+**Note:** The bundled app includes the Tauri process manager + tray, Python backend as a sidecar, AudioCapture Swift binary, and native SwiftUI sidecars (HUD + Settings). The app bundle expects to find the project's `.venv` directory at runtime.
 
 ## Usage
 
@@ -132,17 +132,39 @@ If you've built and installed the app bundle:
 
 ### Development Mode (Quick start)
 
-```bash
-source .venv/bin/activate
+There are two common dev loops:
 
-# Start the backend
+**A) Native HUD loop (fastest UI iteration):**
+```bash
+# Terminal 1: backend
+source .venv/bin/activate
 python -m backend.main
 
-# In another terminal — launch the overlay
+# Terminal 2: native HUD
+cd native/MeetingBuddyHUD
+swift run
+```
+
+**B) Full app loop (tray + global shortcuts via Tauri):**
+```bash
+# Build/copy sidecars for Tauri (one-time or whenever they change)
+cd native/MeetingBuddyHUD && swift build -c release
+cp .build/release/MeetingBuddyHUD ../../ui/src-tauri/MeetingBuddyHUD-aarch64-apple-darwin
+cd -
+
+cd native/MeetingBuddySettings && swift build -c release
+cp .build/release/MeetingBuddySettings ../../ui/src-tauri/MeetingBuddySettings-aarch64-apple-darwin
+cd -
+
+# Terminal 1: backend
+source .venv/bin/activate
+python -m backend.main
+
+# Terminal 2: Tauri process manager
 cd ui && npm run tauri dev
 ```
 
-Tip: Settings now opens in a **separate Settings window** (Cmd+,) with sidebar navigation.
+Tip: Settings opens as a **separate Settings app** (Cmd+,) with sidebar navigation. This is intentional (fast-path during the native migration).
 
 Click the gear icon in the overlay to:
 1. **Set your OpenAI API key** (or use OAuth with ChatGPT Plus) — required for synthesis
@@ -185,6 +207,12 @@ python -m ingest ingest --project "my-project" --path https://example.com/articl
 python -m ingest list-docs --project "my-project"
 ```
 
+## Settings behavior (by design)
+
+Settings launches as a **separate native app** (`MeetingBuddySettings`) rather than an in-HUD sheet. This keeps the HUD lightweight and lets Settings own permissions deep-links and longer-running admin flows.
+
+We can unify Settings into the HUD later, but the current behavior is intentional for this internal tool.
+
 ## Hotkeys
 
 | Shortcut | Action |
@@ -217,10 +245,10 @@ Settings like API key and active project persist in `~/.meeting-buddy/config.jso
 - Verify audio is actually playing (check system volume)
 - Try restarting the app after granting permissions
 
-**Cannot connect to the server**
-- The Settings window and overlay talk to the backend at `ws://localhost:8765`. If you see "Cannot connect to the server", the backend is not running.
-- **Bundled app**: The app starts the backend automatically when you launch Meeting Buddy. If it still fails, the bundle may not find a Python venv (e.g. copy `.venv` to `~/.meeting-buddy/venv` or see the build docs for bundling a venv).
-- **Development**: Start the backend first in a separate terminal: `source .venv/bin/activate && python -m backend.main`, then run the UI with `cd ui && npm run tauri dev`.
+**Cannot connect to the server (ws://localhost:8765)**
+- The "server" is the local Python backend. If nothing is listening on `localhost:8765`, the backend did not start.
+- **Bundled app**: Launch **Meeting Buddy** from Applications (this starts the backend + tray). Then open HUD/Settings. If it still fails, the bundle may not find a Python venv (e.g. copy `.venv` to `~/.meeting-buddy/venv` or see the build docs for bundling a venv).
+- **Dev**: Start the backend first in a separate terminal: `source .venv/bin/activate && python -m backend.main`, then run the UI with `cd ui && npm run tauri dev`. If you started the native HUD directly (`swift run`), the reliable path is still running the backend yourself.
 
 **Transcription is slow**
 - Switch to a smaller model: `model_size="tiny.en"` in `backend/config.py`

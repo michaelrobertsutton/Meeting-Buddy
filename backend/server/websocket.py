@@ -783,7 +783,7 @@ class TranscriptWebSocket:
             if not self._clients:
                 continue
 
-            message = json.dumps(self._build_message("update"))
+            message = json.dumps(self._build_message("update", include_segments=transcript_changed))
             disconnected = set()
             for ws in self._clients:
                 try:
@@ -906,15 +906,19 @@ class TranscriptWebSocket:
                 disconnected.add(ws)
         self._clients -= disconnected
 
-    def _build_message(self, msg_type: str) -> dict:
-        """Build a message payload from current buffer state."""
-        segments = self.buffer.get_segments()
+    def _build_message(self, msg_type: str, include_segments: bool = True) -> dict:
+        """Build a message payload from current buffer state.
+
+        `segments` can be omitted for non-transcript updates to reduce UI churn.
+        """
         msg = {
             "type": msg_type,
             "protocol_version": 1,
-            "segments": [seg.to_dict() for seg in segments],
             "version": self.buffer.get_version(),
         }
+        if include_segments:
+            segments = self.buffer.get_segments()
+            msg["segments"] = [seg.to_dict() for seg in segments]
         if self._extractor:
             msg["active_question"] = self._extractor.current_question
             msg["question_history"] = self._extractor.question_history
