@@ -38,9 +38,12 @@ enum SettingsLauncher {
         )
 
         if let exe = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) {
-            let config = NSWorkspace.OpenConfiguration()
-            config.activates = true
-            NSWorkspace.shared.openApplication(at: exe, configuration: config)
+            // Launch the Settings binary as a subprocess. Do NOT use openApplication(at:configuration:)
+            // — that API is for .app bundles; for a raw executable macOS opens a terminal.
+            let process = Process()
+            process.executableURL = exe
+            process.arguments = []
+            try process.run()
             return
         }
 
