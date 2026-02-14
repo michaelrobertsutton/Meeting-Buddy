@@ -267,31 +267,33 @@ struct SynthesisCardView: View {
                     .foregroundStyle(Color(hex: "#F44336"))
             }
 
-            if !partialText.isEmpty {
+            let isStreaming = !partialText.isEmpty
+
+            if isStreaming {
                 Text(partialText)
                     .font(.body)
                     .italic()
                     .foregroundStyle(AppTheme.accentBlue)
-            }
+            } else {
+                if let one = answer?.one_liner, !one.isEmpty {
+                    Text(one)
+                        .font(.body)
+                        .foregroundStyle(AppTheme.textPrimary)
+                }
 
-            if let one = answer?.one_liner, !one.isEmpty {
-                Text(one)
-                    .font(.body)
-                    .foregroundStyle(AppTheme.textPrimary)
-            }
+                if let bullets = answer?.bullets, !bullets.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(bullets, id: \.self) { bullet in
+                            HStack(alignment: .top, spacing: 8) {
+                                Image(systemName: "circle.fill")
+                                    .font(.system(size: 5, weight: .semibold))
+                                    .foregroundStyle(AppTheme.accentBlue)
+                                    .padding(.top, 6)
 
-            if let bullets = answer?.bullets, !bullets.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(bullets, id: \.self) { bullet in
-                        HStack(alignment: .top, spacing: 8) {
-                            Image(systemName: "circle.fill")
-                                .font(.system(size: 5, weight: .semibold))
-                                .foregroundStyle(AppTheme.accentBlue)
-                                .padding(.top, 6)
-
-                            Text(bullet)
-                                .font(.body)
-                                .foregroundStyle(AppTheme.textPrimary)
+                                Text(bullet)
+                                    .font(.body)
+                                    .foregroundStyle(AppTheme.textPrimary)
+                            }
                         }
                     }
                 }
