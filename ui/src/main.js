@@ -501,6 +501,31 @@ document.addEventListener('DOMContentLoaded', () => {
         checkAndShowOnboarding();
     }, 100);
 
+    // Listen for backend lifecycle events emitted by the Tauri sidecar manager.
+    // These help reduce false "cannot connect" errors when the backend is still loading.
+    try {
+        const listen = window.__TAURI__?.event?.listen;
+        if (listen) {
+            listen('backend-ready', () => {
+                console.log('[backend] ready');
+                // Kick the WS connection attempt immediately.
+                connectWebSocket();
+            });
+            listen('backend-terminated', (event) => {
+                const payload = event?.payload;
+                console.warn('[backend] terminated', payload);
+                setConnectionStatus('disconnected');
+                // Best-effort: surface details in the settings hint if present.
+                if (dom.backendHint && payload) {
+                    dom.backendHint.textContent = `Backend terminated (code=${payload[0] ?? 'n/a'}, signal=${payload[1] ?? 'n/a'}).`;
+                    dom.backendHint.classList.remove('hidden');
+                }
+            });
+        }
+    } catch (e) {
+        console.debug('[backend] event listener setup failed', e);
+    }
+
     connectWebSocket();
 });
 
