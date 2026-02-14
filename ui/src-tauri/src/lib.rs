@@ -4,31 +4,21 @@ use tauri::{Emitter, Manager};
 
 use tauri_plugin_shell::ShellExt;
 
-
-
 /// Holds the settings sidecar child process so we can kill it before re-launching.
 
 struct SettingsChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
-
-
 
 /// Holds the native HUD sidecar child process so we can kill it to hide.
 
 struct HudChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
-
-
 #[cfg(target_os = "macos")]
 
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
-
-
 /// Holds the backend sidecar child process so we can kill it on app exit.
 
 struct BackendChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
-
-
 
 #[tauri::command]
 
@@ -37,8 +27,6 @@ fn get_backend_url() -> String {
     "ws://localhost:8765".to_string()
 
 }
-
-
 
 #[tauri::command]
 
@@ -49,8 +37,6 @@ fn dismiss_onboarding() -> Result<(), String> {
     Ok(())
 
 }
-
-
 
 /// Open a URL (e.g. System Settings deep link) via macOS `open` command.
 
@@ -71,8 +57,6 @@ fn open_system_settings_url(url: String) -> Result<(), String> {
     Ok(())
 
 }
-
-
 
 #[cfg(target_os = "macos")]
 
@@ -102,8 +86,6 @@ fn check_screen_recording_permission() -> bool {
 
 }
 
-
-
 #[cfg(not(target_os = "macos"))]
 
 #[tauri::command]
@@ -115,8 +97,6 @@ fn check_screen_recording_permission() -> bool {
     true
 
 }
-
-
 
 /// Microphone permission check (optional for onboarding).
 
@@ -136,8 +116,6 @@ fn check_microphone_permission() -> bool {
 
 }
 
-
-
 #[cfg(not(target_os = "macos"))]
 
 #[tauri::command]
@@ -147,8 +125,6 @@ fn check_microphone_permission() -> bool {
     true
 
 }
-
-
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 
@@ -168,15 +144,11 @@ pub fn run() {
 
             )?;
 
-
-
             // NOTE: The legacy Tauri overlay window has been retired in favor of the native
 
             // SwiftUI/AppKit HUD sidecar (MeetingBuddyHUD). Tauri acts as a headless process
 
             // manager and tray host.
-
-
 
             // --- Spawn the Python backend sidecar ---
 
@@ -184,19 +156,11 @@ pub fn run() {
 
             let shell = app.shell();
 
-
-
-
-
             // Try to spawn with retry logic
 
             let mut retries = 3;
 
             let mut spawned = false;
-
-
-
-
 
             while retries > 0 && !spawned {
 
@@ -438,15 +402,11 @@ pub fn run() {
 
             }
 
-
-
             // Register sidecar child states
 
             app.manage(SettingsChild(Mutex::new(None)));
 
             app.manage(HudChild(Mutex::new(None)));
-
-
 
             // Spawn native HUD sidecar on startup (best-effort)
 
@@ -472,8 +432,6 @@ pub fn run() {
 
             }
 
-
-
             #[cfg(desktop)]
 
             {
@@ -484,17 +442,11 @@ pub fn run() {
 
                 };
 
-
-
                 let toggle_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
 
                 let settings_shortcut = Shortcut::new(Some(Modifiers::META), Code::Comma);
 
-
-
                 let app_handle = app.handle().clone();
-
-
 
                 app.handle().plugin(
 
@@ -507,8 +459,6 @@ pub fn run() {
                                 return;
 
                             }
-
-
 
                             if shortcut == &toggle_shortcut {
 
@@ -594,15 +544,11 @@ pub fn run() {
 
                 )?;
 
-
-
                 app.global_shortcut().register(toggle_shortcut)?;
 
                 app.global_shortcut().register(settings_shortcut)?;
 
             }
-
-
 
             // --- Menu bar tray icon (Issue #101) ---
 
@@ -614,8 +560,6 @@ pub fn run() {
 
                 use tauri::tray::TrayIconBuilder;
 
-
-
                 let toggle_item = MenuItem::with_id(app, "toggle_hud", "Toggle HUD", true, Some("Alt+Space"))?;
 
                 let settings_item = MenuItem::with_id(app, "open_settings", "Open Settings", true, Some("Cmd+,"))?;
@@ -624,11 +568,7 @@ pub fn run() {
 
                 let quit_item = MenuItem::with_id(app, "quit", "Quit Meeting Buddy", true, None::<&str>)?;
 
-
-
                 let menu = Menu::with_items(app, &[&toggle_item, &settings_item, &export_item, &quit_item])?;
-
-
 
                 let app_handle = app.handle().clone();
 
@@ -744,8 +684,6 @@ pub fn run() {
 
             }
 
-
-
             Ok(())
 
         })
@@ -759,8 +697,6 @@ pub fn run() {
         .build(tauri::generate_context!())
 
         .expect("error while building tauri application");
-
-
 
     app.run(|app_handle, event| {
 
@@ -813,5 +749,3 @@ pub fn run() {
     });
 
 }
-
-
