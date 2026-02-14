@@ -59,3 +59,7 @@ jobs:
         run: |
           cd native/MeetingBuddyShell
           swift build -c release
+      - name: Build MeetingBuddyHUD
+        run: |
+          cd native/MeetingBuddyHUD
+          swift build -c release

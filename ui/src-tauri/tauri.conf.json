@@ -11,22 +11,7 @@
   "app": {
     "withGlobalTauri": true,
     "macOSPrivateApi": true,
-    "windows": [
-      {
-        "label": "overlay",
-        "title": "Meeting Buddy",
-        "width": 420,
-        "height": 700,
-        "x": 50,
-        "y": 100,
-        "resizable": true,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "skipTaskbar": true,
-        "visible": true
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null
     }
@@ -44,7 +29,8 @@
     "externalBin": [
       "AudioCapture",
       "meeting-buddy-backend",
-      "MeetingBuddySettings"
+      "MeetingBuddySettings",
+      "MeetingBuddyHUD"
     ]
   }
 }
