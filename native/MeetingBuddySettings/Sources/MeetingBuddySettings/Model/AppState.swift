@@ -36,11 +36,54 @@ struct DocInfo: Codable, Identifiable, Hashable {
     var title: String
     var chunkCount: Int?
     var source: String?
+    var sourcePath: String?
+    var sizeBytes: Int?
+    var indexed: Bool?
+    var priority: String?
+
+    init(
+        title: String,
+        chunkCount: Int? = nil,
+        source: String? = nil,
+        sourcePath: String? = nil,
+        sizeBytes: Int? = nil,
+        indexed: Bool? = nil,
+        priority: String? = nil
+    ) {
+        self.title = title
+        self.chunkCount = chunkCount
+        self.source = source
+        self.sourcePath = sourcePath
+        self.sizeBytes = sizeBytes
+        self.indexed = indexed
+        self.priority = priority
+    }
 
     enum CodingKeys: String, CodingKey {
         case title
         case chunkCount = "chunk_count"
         case source
+        case sourcePath = "source_path"
+        case sizeBytes = "size_bytes"
+        case indexed
+        case priority
+    }
+
+    var fileType: String {
+        let path = sourcePath ?? source ?? ""
+        guard let ext = path.split(separator: ".").last.map(String.init), !ext.isEmpty else { return "—" }
+        return ext.uppercased()
+    }
+
+    var sizeLabel: String {
+        guard let bytes = sizeBytes, bytes > 0 else { return "—" }
+        let formatter = ByteCountFormatter()
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    var statusLabel: String {
+        (indexed ?? true) ? "Indexed" : "—"
     }
 }
 

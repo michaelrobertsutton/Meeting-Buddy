@@ -54,11 +54,26 @@ struct GeneralView: View {
                 }
             }
 
-            Section("Keyboard Shortcuts") {
-                shortcutRow("Toggle overlay", key: "⌥Space")
-                shortcutRow("Open Settings", key: "⌘,")
-                shortcutRow("Pin answer", key: "⌘⇧P")
-                shortcutRow("Clear session", key: "⌘K")
+            GroupBox("Keyboard Shortcuts") {
+                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+                    GridRow {
+                        Text("Alt+Space").monospaced()
+                        Text("Toggle overlay")
+                    }
+                    GridRow {
+                        Text("Cmd+,").monospaced()
+                        Text("Open Settings")
+                    }
+                    GridRow {
+                        Text("Cmd+K").monospaced()
+                        Text("Clear session")
+                    }
+                    GridRow {
+                        Text("Cmd+Shift+P").monospaced()
+                        Text("Pin/unpin answer")
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
         .formStyle(.grouped)
@@ -70,15 +85,6 @@ struct GeneralView: View {
         }
     }
 
-    private func shortcutRow(_ label: String, key: String) -> some View {
-        HStack {
-            Text(label)
-            Spacer()
-            Text(key)
-                .font(.system(.body, design: .monospaced))
-                .foregroundStyle(.secondary)
-        }
-    }
 }
 
 struct NewProjectSheet: View {
