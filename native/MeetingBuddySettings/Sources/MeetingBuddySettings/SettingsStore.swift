@@ -285,7 +285,7 @@ class SettingsStore: ObservableObject {
         let ns = error as NSError
         if ns.domain == NSURLErrorDomain {
             switch ns.code {
-            case NSURLErrorCannotConnectToHost, NSURLErrorConnectionRefused, NSURLErrorTimedOut:
+            case NSURLErrorCannotConnectToHost, NSURLErrorTimedOut:
                 return "Cannot connect to the backend (localhost:8765). Make sure the Meeting Buddy app is running so the backend starts, or in development run: python -m backend.main"
             case NSURLErrorNotConnectedToInternet:
                 return "No network. The backend runs locally at localhost:8765 — check that Meeting Buddy (or the backend) is running."
