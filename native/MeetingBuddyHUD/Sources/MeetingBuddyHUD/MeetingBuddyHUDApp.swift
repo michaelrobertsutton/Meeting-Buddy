@@ -21,7 +21,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let ws = WebSocketClient()
     private let hudController = HUDPanelController()
     private var hotkey: GlobalHotkey?
-    private var settingsHotkeyMonitor: Any?
+    private var settingsHotkeyGlobalMonitor: Any?
+    private var settingsHotkeyLocalMonitor: Any?
     private var hideObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -52,12 +53,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey?.register()
 
         // Cmd+, opens Settings (same as gear button)
-        settingsHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { event in
-            // keyCode 43 = comma; Command modifier
-            guard event.keyCode == 43, event.modifierFlags.contains(.command) else { return }
-            DispatchQueue.main.async {
-                try? SettingsLauncher.launch()
-            }
+        // Note: Global monitors do NOT receive events when this app is active.
+        // Also, keyCode is layout-dependent; prefer charactersIgnoringModifiers.
+        settingsHotkeyGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleSettingsHotkey(event)
+        }
+        settingsHotkeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            self?.handleSettingsHotkey(event)
+            return event
         }
     }
 
@@ -66,11 +69,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.removeObserver(observer)
         }
         hotkey?.unregister()
-        if let monitor = settingsHotkeyMonitor {
+        if let monitor = settingsHotkeyGlobalMonitor {
             NSEvent.removeMonitor(monitor)
-            settingsHotkeyMonitor = nil
+            settingsHotkeyGlobalMonitor = nil
+        }
+        if let monitor = settingsHotkeyLocalMonitor {
+            NSEvent.removeMonitor(monitor)
+            settingsHotkeyLocalMonitor = nil
         }
         ws.disconnect()
+    }
+
+    private func handleSettingsHotkey(_ event: NSEvent) {
+        guard event.modifierFlags.contains(.command) else { return }
+        guard let chars = event.charactersIgnoringModifiers else { return }
+        guard chars == "," else { return }
+
+        DispatchQueue.main.async {
+            try? SettingsLauncher.launch()
+        }
     }
 
     private func toggleHUD() {
