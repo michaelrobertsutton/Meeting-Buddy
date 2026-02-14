@@ -12,14 +12,16 @@ if [ -z "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
             export MEETINGBUDDY_PROJECT_ROOT="$CANDIDATE"
         fi
     else
-        # Dev mode: walk up from SCRIPT_DIR until we find backend/main.py
+        # Dev mode: walk up from SCRIPT_DIR until we find backend/main.py or hit filesystem root
         WALK="$SCRIPT_DIR"
-        for _ in 1 2 3 4 5 6; do
-            WALK="$(cd "$WALK/.." && pwd)"
+        while true; do
             if [ -f "$WALK/backend/main.py" ]; then
                 export MEETINGBUDDY_PROJECT_ROOT="$WALK"
                 break
             fi
+            NEXT="$(cd "$WALK/.." && pwd)"
+            [ "$NEXT" = "$WALK" ] && break
+            WALK="$NEXT"
         done
     fi
 fi
