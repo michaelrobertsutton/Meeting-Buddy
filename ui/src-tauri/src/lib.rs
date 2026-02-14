@@ -276,6 +276,7 @@ pub fn run() {
                                 if let Some(state) = app_handle.try_state::<SettingsChild>() {
                                     if let Some(old_child) = state.0.lock().unwrap().take() {
                                         let _ = old_child.kill();
+                                        std::thread::sleep(std::time::Duration::from_millis(150));
                                     }
                                 }
                                 match app_handle.shell().sidecar("MeetingBuddySettings") {
@@ -350,6 +351,7 @@ pub fn run() {
                                 if let Some(state) = app_handle.try_state::<SettingsChild>() {
                                     if let Some(old_child) = state.0.lock().unwrap().take() {
                                         let _ = old_child.kill();
+                                        std::thread::sleep(std::time::Duration::from_millis(150));
                                     }
                                 }
                                 match app_handle.shell().sidecar("MeetingBuddySettings") {
@@ -390,17 +392,19 @@ pub fn run() {
 
     app.run(|app_handle, event| {
         if let tauri::RunEvent::Exit = event {
-            // Kill the backend sidecar on app exit
+            // Kill the backend sidecar on app exit and wait briefly so it can release the port
             if let Some(state) = app_handle.try_state::<BackendChild>() {
                 if let Some(child) = state.0.lock().unwrap().take() {
                     log::info!("Killing backend sidecar");
                     let _ = child.kill();
+                    std::thread::sleep(std::time::Duration::from_millis(300));
                 }
             }
             // Kill settings sidecar on app exit
             if let Some(state) = app_handle.try_state::<SettingsChild>() {
                 if let Some(child) = state.0.lock().unwrap().take() {
                     let _ = child.kill();
+                    std::thread::sleep(std::time::Duration::from_millis(150));
                 }
             }
         }
