@@ -776,13 +776,13 @@ class TranscriptWebSocket:
 
             if question_changed and question and self._synthesis_engine:
                 # Only auto-trigger synthesis when not in manual mode
-                if not self._synthesis_in_flight and self._extractor and self._extractor._manual_question is None:
+                if not self._synthesis_in_flight and self._extractor and not self._extractor.is_manual_override:
                     logger.info("[WebSocket] Triggering synthesis for question: %s", question)
                     asyncio.create_task(self._run_synthesis(question))
                 else:
                     if self._synthesis_in_flight:
                         logger.debug("[WebSocket] Synthesis already in flight, skipping")
-                    elif self._extractor and self._extractor._manual_question is not None:
+                    elif self._extractor and self._extractor.is_manual_override:
                         logger.debug("[WebSocket] Manual question override active, skipping auto-synthesis")
                     else:
                         logger.debug("[WebSocket] No synthesis engine available")
@@ -960,7 +960,7 @@ class TranscriptWebSocket:
         if self._extractor:
             msg["active_question"] = self._extractor.current_question
             msg["question_history"] = self._extractor.question_history
-            msg["manual_question"] = self._extractor._manual_question is not None
+            msg["manual_question"] = self._extractor.is_manual_override
         msg["synthesis_searching"] = self._synthesis_in_flight
         if self._active_answer:
             msg["active_answer"] = self._active_answer
