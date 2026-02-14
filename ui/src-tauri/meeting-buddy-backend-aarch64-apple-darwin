@@ -60,6 +60,14 @@ else
     export MEETINGBUDDY_AUDIO_BINARY="$ROOT/audio-capture/.build/release/AudioCapture"
 fi
 
+# --- Prerequisite checks (clear errors to stderr) ---
+if [ ! -f "$MEETINGBUDDY_AUDIO_BINARY" ]; then
+    echo "ERROR: AudioCapture binary not found at: $MEETINGBUDDY_AUDIO_BINARY" >&2
+    echo "Build with: cd audio-capture && swift build -c release" >&2
+    exit 1
+fi
+echo "[sidecar] PROJECT_ROOT=${MEETINGBUDDY_PROJECT_ROOT:-<unset>} VENV=$VENV AUDIO_BINARY=$MEETINGBUDDY_AUDIO_BINARY" >&2
+
 # --- Port pre-check: evict any stale backend holding port 8765 ---
 STALE_PIDS=$(lsof -ti tcp:8765 2>/dev/null || true)
 if [ -n "$STALE_PIDS" ]; then
