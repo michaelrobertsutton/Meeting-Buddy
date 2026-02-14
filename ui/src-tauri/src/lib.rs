@@ -5,6 +5,9 @@ use tauri_plugin_shell::ShellExt;
 /// Holds the settings sidecar child process so we can kill it before re-launching.
 struct SettingsChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
+/// Holds the native HUD sidecar child process so we can kill it to hide.
+struct HudChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
+
 #[cfg(target_os = "macos")]
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
@@ -81,15 +84,9 @@ pub fn run() {
                     .build(),
             )?;
 
-            // --- macOS HUD styling: vibrancy (HUD window material) ---
-            #[cfg(target_os = "macos")]
-            {
-                if let Some(window) = app.get_webview_window("overlay") {
-                    // Glassy background behind the WebView. Border/radius are handled by CSS.
-                    // High-contrast translucent background (HUD window material)
-                    let _ = apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, None);
-                }
-            }
+            // NOTE: The legacy Tauri overlay window has been retired in favor of the native
+            // SwiftUI/AppKit HUD sidecar (MeetingBuddyHUD). Tauri acts as a headless process
+            // manager and tray host.
 
             // --- Spawn the Python backend sidecar ---
             let app_handle = app.handle().clone();
@@ -133,10 +130,7 @@ pub fn run() {
                                                     payload.code,
                                                     payload.signal
                                                 );
-                                                // Emit event to UI that backend died
-                                                if let Some(window) = app_handle_clone.get_webview_window("overlay") {
-                                                    let _ = window.emit("backend-terminated", payload.code);
-                                                }
+                                                // TODO: surface backend termination state to native HUD
                                                 // Optional restart: try once after short delay (let port release)
                                                 let app_handle_restart = app_handle_clone.clone();
                                                 tauri::async_runtime::spawn(async move {
@@ -173,9 +167,7 @@ pub fn run() {
                                                                                     payload.code,
                                                                                     payload.signal
                                                                                 );
-                                                                                if let Some(window) = app_handle_drain.get_webview_window("overlay") {
-                                                                                    let _ = window.emit("backend-terminated", payload.code);
-                                                                                }
+                                                                                // TODO: surface backend termination state to native HUD
                                                                                 break;
                                                                             }
                                                                             _ => {}
@@ -225,8 +217,22 @@ pub fn run() {
                 }
             }
 
-            // Register SettingsChild state (holds the settings sidecar handle)
+            // Register sidecar child states
             app.manage(SettingsChild(Mutex::new(None)));
+            app.manage(HudChild(Mutex::new(None)));
+
+            // Spawn native HUD sidecar on startup (best-effort)
+            match app.handle().shell().sidecar("MeetingBuddyHUD") {
+                Ok(cmd) => match cmd.spawn() {
+                    Ok((_rx, child)) => {
+                        if let Some(state) = app.handle().try_state::<HudChild>() {
+                            *state.0.lock().unwrap() = Some(child);
+                        }
+                    }
+                    Err(e) => log::error!("[hud] Failed to spawn: {e}"),
+                },
+                Err(e) => log::error!("[hud] Sidecar not found: {e}"),
+            }
 
             #[cfg(desktop)]
             {
@@ -234,19 +240,8 @@ pub fn run() {
                     Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
                 };
 
-                let toggle_shortcut =
-                    Shortcut::new(Some(Modifiers::ALT), Code::Space);
-                let pin_shortcut =
-                    Shortcut::new(Some(Modifiers::META | Modifiers::SHIFT), Code::KeyP);
-
-                let settings_shortcut =
-                    Shortcut::new(Some(Modifiers::META), Code::Comma);
-                let clear_shortcut =
-                    Shortcut::new(Some(Modifiers::META), Code::KeyK);
-                
-                // CRITICAL: Escape key to dismiss onboarding overlay
-                let dismiss_onboarding_shortcut =
-                    Shortcut::new(None, Code::Escape);
+                let toggle_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
+                let settings_shortcut = Shortcut::new(Some(Modifiers::META), Code::Comma);
 
                 let app_handle = app.handle().clone();
 
@@ -258,17 +253,22 @@ pub fn run() {
                             }
 
                             if shortcut == &toggle_shortcut {
-                                if let Some(window) = app_handle.get_webview_window("overlay") {
-                                    if window.is_visible().unwrap_or(false) {
-                                        let _ = window.hide();
+                                // Toggle HUD sidecar visibility.
+                                // For now, we model "hide" as kill and "show" as spawn.
+                                if let Some(state) = app_handle.try_state::<HudChild>() {
+                                    if let Some(old_child) = state.0.lock().unwrap().take() {
+                                        let _ = old_child.kill();
                                     } else {
-                                        let _ = window.show();
-                                        // Intentionally do NOT focus the window (non-activating HUD behavior)
+                                        match app_handle.shell().sidecar("MeetingBuddyHUD") {
+                                            Ok(cmd) => match cmd.spawn() {
+                                                Ok((_rx, child)) => {
+                                                    *state.0.lock().unwrap() = Some(child);
+                                                }
+                                                Err(e) => log::error!("[hud] Failed to spawn: {e}"),
+                                            },
+                                            Err(e) => log::error!("[hud] Sidecar not found: {e}"),
+                                        }
                                     }
-                                }
-                            } else if shortcut == &pin_shortcut {
-                                if let Some(window) = app_handle.get_webview_window("overlay") {
-                                    let _ = window.emit("toggle-pin", ());
                                 }
                             } else if shortcut == &settings_shortcut {
                                 // Launch native SwiftUI settings app as a sidecar
@@ -279,29 +279,15 @@ pub fn run() {
                                     }
                                 }
                                 match app_handle.shell().sidecar("MeetingBuddySettings") {
-                                    Ok(cmd) => {
-                                        match cmd.spawn() {
-                                            Ok((_rx, child)) => {
-                                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                                    *state.0.lock().unwrap() = Some(child);
-                                                }
+                                    Ok(cmd) => match cmd.spawn() {
+                                        Ok((_rx, child)) => {
+                                            if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                                                *state.0.lock().unwrap() = Some(child);
                                             }
-                                            Err(e) => log::error!("[settings] Failed to spawn: {e}"),
                                         }
-                                    }
+                                        Err(e) => log::error!("[settings] Failed to spawn: {e}"),
+                                    },
                                     Err(e) => log::error!("[settings] Sidecar not found: {e}"),
-                                }
-                            } else if shortcut == &clear_shortcut {
-                                if let Some(window) = app_handle.get_webview_window("overlay") {
-                                    let _ = window.emit("clear-session", ());
-                                }
-                            } else if shortcut == &dismiss_onboarding_shortcut {
-                                // Escape key - dismiss onboarding overlay
-                                if let Some(window) = app_handle.get_webview_window("overlay") {
-                                    // Try multiple methods to ensure it works
-                                    let _ = window.eval("if(window.__hideOnboarding) { window.__hideOnboarding(); } else if(window.__disableOnboarding) { window.__disableOnboarding(); }");
-                                    // Also try direct DOM manipulation as fallback
-                                    let _ = window.eval("const el = document.getElementById('onboarding'); if(el) el.classList.add('hidden');");
                                 }
                             }
                         })
@@ -309,10 +295,7 @@ pub fn run() {
                 )?;
 
                 app.global_shortcut().register(toggle_shortcut)?;
-                app.global_shortcut().register(pin_shortcut)?;
                 app.global_shortcut().register(settings_shortcut)?;
-                app.global_shortcut().register(clear_shortcut)?;
-                app.global_shortcut().register(dismiss_onboarding_shortcut)?;
             }
 
             // --- Menu bar tray icon (Issue #101) ---
@@ -337,11 +320,19 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
-                                if let Some(window) = app_handle.get_webview_window("overlay") {
-                                    if window.is_visible().unwrap_or(false) {
-                                        let _ = window.hide();
+                                if let Some(state) = app_handle.try_state::<HudChild>() {
+                                    if let Some(old_child) = state.0.lock().unwrap().take() {
+                                        let _ = old_child.kill();
                                     } else {
-                                        let _ = window.show();
+                                        match app_handle.shell().sidecar("MeetingBuddyHUD") {
+                                            Ok(cmd) => match cmd.spawn() {
+                                                Ok((_rx, child)) => {
+                                                    *state.0.lock().unwrap() = Some(child);
+                                                }
+                                                Err(e) => log::error!("[hud] Failed to spawn: {e}"),
+                                            },
+                                            Err(e) => log::error!("[hud] Sidecar not found: {e}"),
+                                        }
                                     }
                                 }
                             }
@@ -353,23 +344,20 @@ pub fn run() {
                                     }
                                 }
                                 match app_handle.shell().sidecar("MeetingBuddySettings") {
-                                    Ok(cmd) => {
-                                        match cmd.spawn() {
-                                            Ok((_rx, child)) => {
-                                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                                    *state.0.lock().unwrap() = Some(child);
-                                                }
+                                    Ok(cmd) => match cmd.spawn() {
+                                        Ok((_rx, child)) => {
+                                            if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                                                *state.0.lock().unwrap() = Some(child);
                                             }
-                                            Err(e) => log::error!("[settings] Failed to spawn: {e}"),
                                         }
-                                    }
+                                        Err(e) => log::error!("[settings] Failed to spawn: {e}"),
+                                    },
                                     Err(e) => log::error!("[settings] Sidecar not found: {e}"),
                                 }
                             }
                             "export" => {
-                                if let Some(overlay) = app_handle.get_webview_window("overlay") {
-                                    let _ = overlay.eval("if(typeof exportSession === 'function') exportSession();");
-                                }
+                                // TODO: implement export once native HUD exposes an IPC hook.
+                                log::info!("[tray] export clicked (not yet implemented for native HUD)");
                             }
                             "quit" => {
                                 app_handle.exit(0);
@@ -399,6 +387,12 @@ pub fn run() {
             }
             // Kill settings sidecar on app exit
             if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                if let Some(child) = state.0.lock().unwrap().take() {
+                    let _ = child.kill();
+                }
+            }
+            // Kill HUD sidecar on app exit
+            if let Some(state) = app_handle.try_state::<HudChild>() {
                 if let Some(child) = state.0.lock().unwrap().take() {
                     let _ = child.kill();
                 }
