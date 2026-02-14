@@ -22,6 +22,11 @@ cd ui && npm run tauri build                 # Production build
 cd native/MeetingBuddySettings && swift build -c release
 cp .build/release/MeetingBuddySettings \
    ../../ui/src-tauri/MeetingBuddySettings-aarch64-apple-darwin
+
+# Rebuild native HUD overlay (SwiftUI sidecar)
+cd native/MeetingBuddyHUD && swift build -c release
+cp .build/release/MeetingBuddyHUD \
+   ../../ui/src-tauri/MeetingBuddyHUD-aarch64-apple-darwin
 ```
 
 ### Ingest CLI
