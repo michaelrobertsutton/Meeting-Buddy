@@ -4,9 +4,59 @@ on:
   pull_request:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
+  ci_gate:
+    name: CI gate (opt-in)
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.gate.outputs.run }}
+      reason: ${{ steps.gate.outputs.reason }}
+    steps:
+      - id: gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const event = context.eventName;
+            if (event === 'workflow_dispatch') {
+              core.setOutput('run', 'true');
+              core.setOutput('reason', 'workflow_dispatch');
+              return;
+            }
+
+            // For pushes to main, always run.
+            if (event === 'push') {
+              core.setOutput('run', 'true');
+              core.setOutput('reason', 'push');
+              return;
+            }
+
+            // For PRs, only run if explicitly opted in via label.
+            const number = context.payload.pull_request?.number;
+            if (!number) {
+              core.setOutput('run', 'false');
+              core.setOutput('reason', 'no-pr-number');
+              return;
+            }
+
+            const { data: labels } = await github.rest.issues.listLabelsOnIssue({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: number,
+              per_page: 100,
+            });
+
+            const names = new Set(labels.map(l => l.name));
+            const optedIn = names.has('ci:run');
+
+            core.setOutput('run', optedIn ? 'true' : 'false');
+            core.setOutput('reason', optedIn ? 'label:ci:run' : 'missing-label:ci:run');
+
   python_quality:
+    needs: ci_gate
+    if: needs.ci_gate.outputs.run == 'true'
+
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -30,6 +80,8 @@ jobs:
           python -m compileall -q backend ingest
 
   ui_syntax:
+    needs: ci_gate
+    if: needs.ci_gate.outputs.run == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -48,6 +100,8 @@ jobs:
           npm run build-frontend
 
   swift_build:
+    needs: ci_gate
+    if: needs.ci_gate.outputs.run == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
@@ -65,6 +119,8 @@ jobs:
           swift build -c release
 
   rust_quality:
+    needs: ci_gate
+    if: needs.ci_gate.outputs.run == 'true'
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v6
