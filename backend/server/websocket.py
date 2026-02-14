@@ -242,7 +242,10 @@ class TranscriptWebSocket:
                 from ingest.store import ProjectStore
                 store = ProjectStore(Path(p["path"]))
                 p["chunk_count"] = store.chunk_count()
-            except Exception:
+            except (FileNotFoundError, OSError):
+                p["chunk_count"] = 0
+            except Exception as e:
+                logger.warning("Failed to get chunk count for project %s: %s", p.get("path"), e)
                 p["chunk_count"] = 0
         return {"projects": projects}
 
@@ -310,7 +313,10 @@ class TranscriptWebSocket:
             registry = {}
             try:
                 registry = self._project_manager.get_doc_registry(active)
-            except Exception:
+            except (FileNotFoundError, OSError, json.JSONDecodeError):
+                registry = {}
+            except Exception as e:
+                logger.warning("Failed to get doc registry for project %s: %s", active, e)
                 registry = {}
 
             for d in docs:
