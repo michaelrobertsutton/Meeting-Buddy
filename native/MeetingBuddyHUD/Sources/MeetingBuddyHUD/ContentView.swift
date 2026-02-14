@@ -243,6 +243,9 @@ struct HUDStatusBarView: View {
                     .font(.caption2)
                     .foregroundStyle(AppTheme.accentBlue)
                     .transition(.opacity)
+            } else {
+                // Keep layout stable when pinned state toggles.
+                Color.clear.frame(width: 0, height: 0)
             }
         }
         .padding(.horizontal, 16)

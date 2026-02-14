@@ -132,6 +132,11 @@ final class WebSocketClient: ObservableObject {
                 self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner
                 if let ans = msg.active_answer { self.activeAnswer = ans }
                 if let searching = msg.synthesis_searching { self.synthesisSearching = searching }
+
+                // "Pinned" indicator: treat as "has any pinned answers"
+                if let pinned = msg.pinned {
+                    self.isPinned = !pinned.isEmpty
+                }
             }
             return
         }
