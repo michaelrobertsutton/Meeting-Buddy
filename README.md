@@ -272,8 +272,7 @@ Meeting Buddy/
 │   ├── config.py            # All configuration dataclasses
 │   ├── settings.py          # Persistent settings (API key, project)
 │   ├── audio/
-│   │   ├── sck_capture.py   # ScreenCaptureKit audio capture
-│   │   └── capture.py       # Legacy sounddevice capture (unused)
+│   │   └── sck_capture.py   # ScreenCaptureKit audio capture
 │   ├── asr/
 │   │   ├── engine.py        # faster-whisper wrapper
 │   │   ├── vad.py           # Silero VAD wrapper
