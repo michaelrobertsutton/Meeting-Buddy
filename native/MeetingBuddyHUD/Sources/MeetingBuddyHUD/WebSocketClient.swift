@@ -25,6 +25,9 @@ final class WebSocketClient: ObservableObject {
     @Published var availableProjects: [String] = []
     @Published var activeProject: String = ""
 
+    // Pins
+    @Published var pinned: [PinnedAnswer] = []
+
     private var task: URLSessionWebSocketTask?
     private let url: URL
 
@@ -133,8 +136,8 @@ final class WebSocketClient: ObservableObject {
                 if let ans = msg.active_answer { self.activeAnswer = ans }
                 if let searching = msg.synthesis_searching { self.synthesisSearching = searching }
 
-                // "Pinned" indicator: treat as "has any pinned answers"
                 if let pinned = msg.pinned {
+                    self.pinned = pinned
                     self.isPinned = !pinned.isEmpty
                 }
             }
@@ -215,6 +218,23 @@ final class WebSocketClient: ObservableObject {
             await MainActor.run {
                 self.applySettings(data)
             }
+            await listProjects()
+        } catch {
+            await MainActor.run {
+                self.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func listProjects() async {
+        do {
+            let data = try await sendCommand("list_projects")
+            if let raw = data["projects"] as? [[String: Any]] {
+                let names = raw.compactMap { $0["name"] as? String }
+                await MainActor.run {
+                    self.availableProjects = names
+                }
+            }
         } catch {
             await MainActor.run {
                 self.lastError = error.localizedDescription
@@ -235,9 +255,71 @@ final class WebSocketClient: ObservableObject {
         }
     }
 
-    func askQuestion(_ text: String) async {
+    func setQuestion(_ text: String) async {
         do {
-            _ = try await sendCommand("manual_question", params: ["question": text])
+            _ = try await sendCommand("set_question", params: ["text": text])
+        } catch {
+            await MainActor.run {
+                self.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func clearQuestionOverride() async {
+        do {
+            // Backend treats empty text as clear.
+            _ = try await sendCommand("set_question", params: ["text": ""]) 
+        } catch {
+            await MainActor.run {
+                self.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func exportSession(format: String = "markdown") async {
+        do {
+            _ = try await sendCommand("export_session", params: ["format": format])
+        } catch {
+            await MainActor.run {
+                self.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func refreshPinned() async {
+        do {
+            let data = try await sendCommand("get_pinned")
+            if let raw = data["pinned"] as? [[String: Any]] {
+                // Best-effort parse for UI state only.
+                let pinned: [PinnedAnswer] = raw.compactMap { dict in
+                    guard let id = dict["id"] as? String else { return nil }
+                    let question = (dict["question"] as? String) ?? ""
+                    let ts = (dict["timestamp"] as? Double) ?? 0
+                    return PinnedAnswer(id: id, question: question, answer: nil, timestamp: ts)
+                }
+                await MainActor.run {
+                    self.pinned = pinned
+                    self.isPinned = !pinned.isEmpty
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func togglePin() async {
+        do {
+            if let first = pinned.first {
+                _ = try await sendCommand("unpin_answer", params: ["id": first.id])
+            } else {
+                var params: [String: Any] = [:]
+                if !activeQuestion.isEmpty { params["question"] = activeQuestion }
+                if let one = activeAnswer?.one_liner { params["answer"] = one }
+                _ = try await sendCommand("pin_answer", params: params)
+            }
+            await refreshPinned()
         } catch {
             await MainActor.run {
                 self.lastError = error.localizedDescription
