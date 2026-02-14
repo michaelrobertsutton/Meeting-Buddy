@@ -35,8 +35,10 @@ class Retriever:
             meta = json.loads(meta_path.read_text())
             reg = meta.get("doc_registry")
             return reg if isinstance(reg, dict) else {}
+        except (FileNotFoundError, OSError, json.JSONDecodeError):
+            return {}
         except Exception:
-            logger.debug("Failed to read doc_registry", exc_info=True)
+            logger.warning("Failed to read doc_registry from %s", meta_path, exc_info=True)
             return {}
 
     def retrieve(self, query: str, top_k: int | None = None) -> list[RetrievalResult]:

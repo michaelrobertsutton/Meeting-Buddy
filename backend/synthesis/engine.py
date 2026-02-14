@@ -153,7 +153,10 @@ class SynthesisEngine:
         if self._retriever and hasattr(self._retriever, "get_doc_registry"):
             try:
                 doc_registry = self._retriever.get_doc_registry()
-            except Exception:
+            except (FileNotFoundError, OSError, json.JSONDecodeError):
+                doc_registry = None
+            except Exception as e:
+                logger.warning("Failed to load doc registry for synthesis: %s", e)
                 doc_registry = None
 
         user_prompt = build_user_prompt(
@@ -308,7 +311,10 @@ class SynthesisEngine:
         if self._retriever and hasattr(self._retriever, "get_doc_registry"):
             try:
                 doc_registry = self._retriever.get_doc_registry()
-            except Exception:
+            except (FileNotFoundError, OSError, json.JSONDecodeError):
+                doc_registry = None
+            except Exception as e:
+                logger.warning("Failed to load doc registry for synthesis: %s", e)
                 doc_registry = None
 
         user_prompt = build_user_prompt(
