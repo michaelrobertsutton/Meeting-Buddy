@@ -10,8 +10,8 @@ enum SettingsSection: String, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .general: return "gearshape"
-        case .documents: return "doc.text"
-        case .account: return "person.circle"
+        case .documents: return "doc.text.magnifyingglass"
+        case .account: return "person.crop.circle"
         }
     }
 }

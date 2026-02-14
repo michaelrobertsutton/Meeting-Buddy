@@ -265,7 +265,19 @@ class SettingsStore: ObservableObject {
     private func decodeDoc(_ dict: [String: Any]) -> DocInfo? {
         guard let title = dict["title"] as? String else { return nil }
         let count = dict["chunk_count"] as? Int
-        let source = dict["source"] as? String
-        return DocInfo(title: title, chunkCount: count, source: source)
+        let source = dict["source"] as? String ?? dict["source_path"] as? String
+        let sourcePath = dict["source_path"] as? String
+        let sizeBytes = dict["size_bytes"] as? Int
+        let indexed = dict["indexed"] as? Bool
+        let priority = dict["priority"] as? String
+        return DocInfo(
+            title: title,
+            chunkCount: count,
+            source: source,
+            sourcePath: sourcePath,
+            sizeBytes: sizeBytes,
+            indexed: indexed,
+            priority: priority
+        )
     }
 }

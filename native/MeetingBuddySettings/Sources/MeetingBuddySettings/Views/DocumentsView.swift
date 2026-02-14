@@ -5,6 +5,11 @@ struct DocumentsView: View {
 
     @EnvironmentObject var store: SettingsStore
     @State private var selection = Set<DocInfo.ID>()
+    @State private var sortOrder: [KeyPathComparator<DocInfo>] = [KeyPathComparator(\.title, order: .forward)]
+
+    private var sortedDocs: [DocInfo] {
+        store.docs.sorted(using: sortOrder)
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -34,20 +39,40 @@ struct DocumentsView: View {
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                Table(store.docs, selection: $selection) {
-                    TableColumn("Title") { doc in
+                Table(sortedDocs, selection: $selection, sortOrder: $sortOrder) {
+                    TableColumn("Name", value: \.title) { doc in
                         Text(doc.title)
-                    }
-                    TableColumn("Chunks") { doc in
-                        Text(doc.chunkCount.map { "\($0)" } ?? "—")
-                            .foregroundStyle(.secondary)
-                    }
-                    .width(60)
-                    TableColumn("Source") { doc in
-                        Text(doc.source ?? "—")
-                            .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
+                    }
+                    .width(min: 300)
+                    TableColumn("Type") { doc in
+                        Text(doc.fileType)
+                            .foregroundStyle(.secondary)
+                    }
+                    .width(80)
+                    TableColumn("Size") { doc in
+                        Text(doc.sizeLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                    .width(80)
+                    TableColumn("Status") { doc in
+                        Text(doc.statusLabel)
+                            .foregroundStyle(.secondary)
+                    }
+                    .width(100)
+                    TableColumn("Priority") { doc in
+                        Text((doc.priority ?? "normal").capitalized)
+                            .foregroundStyle(.secondary)
+                    }
+                    .width(120)
+                }
+                .contextMenu {
+                    if let single = selection.first {
+                        Button("Remove Document", role: .destructive) {
+                            Task { await store.deleteDoc(single) }
+                            selection.remove(single)
+                        }
                     }
                 }
             }
