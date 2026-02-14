@@ -1,7 +1,5 @@
 use std::sync::Mutex;
-
 use tauri::{Emitter, Manager};
-
 use tauri_plugin_shell::ShellExt;
 
 /// Holds the settings sidecar child process so we can kill it before re-launching.
@@ -13,7 +11,6 @@ struct SettingsChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 struct HudChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
 #[cfg(target_os = "macos")]
-
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 /// Holds the backend sidecar child process so we can kill it on app exit.
@@ -21,7 +18,6 @@ use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 struct BackendChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
 
 #[tauri::command]
-
 fn get_backend_url() -> String {
 
     "ws://localhost:8765".to_string()
@@ -29,7 +25,6 @@ fn get_backend_url() -> String {
 }
 
 #[tauri::command]
-
 fn dismiss_onboarding() -> Result<(), String> {
 
     // This command can be called from anywhere to dismiss the onboarding overlay
@@ -43,7 +38,6 @@ fn dismiss_onboarding() -> Result<(), String> {
 /// Used for onboarding "Open System Settings" so it works reliably from native.
 
 #[tauri::command]
-
 fn open_system_settings_url(url: String) -> Result<(), String> {
 
     std::process::Command::new("open")
@@ -59,9 +53,7 @@ fn open_system_settings_url(url: String) -> Result<(), String> {
 }
 
 #[cfg(target_os = "macos")]
-
 #[tauri::command]
-
 fn check_screen_recording_permission() -> bool {
 
     // Use CoreGraphics API to check Screen Recording permission
@@ -73,7 +65,6 @@ fn check_screen_recording_permission() -> bool {
     unsafe {
 
         #[link(name = "CoreGraphics", kind = "framework")]
-
         extern "C" {
 
             fn CGPreflightScreenCaptureAccess() -> bool;
@@ -87,9 +78,7 @@ fn check_screen_recording_permission() -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-
 #[tauri::command]
-
 fn check_screen_recording_permission() -> bool {
 
     // Not macOS, assume permission granted (or not applicable)
@@ -103,9 +92,7 @@ fn check_screen_recording_permission() -> bool {
 /// On macOS we could use AVFoundation; for now return true so we don't block.
 
 #[cfg(target_os = "macos")]
-
 #[tauri::command]
-
 fn check_microphone_permission() -> bool {
 
     // TODO: Use AVFoundation AVCaptureDevice::authorizationStatus(for: .audio)
@@ -117,9 +104,7 @@ fn check_microphone_permission() -> bool {
 }
 
 #[cfg(not(target_os = "macos"))]
-
 #[tauri::command]
-
 fn check_microphone_permission() -> bool {
 
     true
@@ -127,7 +112,6 @@ fn check_microphone_permission() -> bool {
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
-
 pub fn run() {
 
     let app = tauri::Builder::default()
@@ -433,7 +417,6 @@ pub fn run() {
             }
 
             #[cfg(desktop)]
-
             {
 
                 use tauri_plugin_global_shortcut::{
@@ -553,7 +536,6 @@ pub fn run() {
             // --- Menu bar tray icon (Issue #101) ---
 
             #[cfg(desktop)]
-
             {
 
                 use tauri::menu::{Menu, MenuItem};
