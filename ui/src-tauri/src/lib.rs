@@ -1,5 +1,4 @@
 use std::sync::Mutex;
-use std::time::Duration;
 use tauri::Manager;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
@@ -22,7 +21,8 @@ fn spawn_sidecar(
 ) -> Result<(), String> {
     if let Some(old) = state.lock().unwrap().take() {
         let _ = old.kill();
-        std::thread::sleep(Duration::from_millis(150));
+        // Intentionally avoid sleeping here: this function may be called from UI event handlers.
+        // If we need a delay to avoid races, handle it asynchronously at the call site.
     }
     match app.shell().sidecar(name) {
         Ok(cmd) => match cmd.spawn() {
