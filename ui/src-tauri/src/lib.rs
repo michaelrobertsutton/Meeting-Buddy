@@ -36,13 +36,9 @@ fn dismiss_onboarding() -> Result<(), String> {
 #[tauri::command]
 fn open_system_settings_url(url: String) -> Result<(), String> {
     std::process::Command::new("open")
-
         .arg(&url)
-
         .status()
-
         .map_err(|e| e.to_string())?;
-
     Ok(())
 }
 
