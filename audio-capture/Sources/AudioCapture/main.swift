@@ -75,6 +75,7 @@ final class AudioTapRecorder {
     private var converter: AVAudioConverter?
     private var outputFormat: AVAudioFormat?
     private var sourceFormat: AVAudioFormat?
+    private var tapASBD = AudioStreamBasicDescription()
 
     // ---------------------------------------------------------------------------
     // Setup
@@ -147,19 +148,65 @@ final class AudioTapRecorder {
 
         tapID = newTapID
         log("[AudioCapture] tap created (ID: \(tapID))")
+
+        // Read and store the tap's native format for use in setupConverter()
+        var fmtAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioTapPropertyFormat,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var fmtSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.stride)
+        AudioObjectGetPropertyData(tapID, &fmtAddr, 0, nil, &fmtSize, &tapASBD)
+        log("[AudioCapture] tap format: \(tapASBD.mSampleRate) Hz, \(tapASBD.mChannelsPerFrame) ch")
     }
 
     // ---------------------------------------------------------------------------
     // 2. Create aggregate device
     // ---------------------------------------------------------------------------
 
+    /// Returns the UID string of the current default system output device.
+    private func defaultOutputDeviceUID() -> String? {
+        var deviceID = AudioObjectID(kAudioObjectUnknown)
+        var addr = AudioObjectPropertyAddress(
+            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var size = UInt32(MemoryLayout<AudioObjectID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &deviceID) == noErr,
+              deviceID != AudioObjectID(kAudioObjectUnknown) else { return nil }
+
+        var uidAddr = AudioObjectPropertyAddress(
+            mSelector: kAudioDevicePropertyDeviceUID,
+            mScope: kAudioObjectPropertyScopeGlobal,
+            mElement: kAudioObjectPropertyElementMain
+        )
+        var cfUID: CFString = "" as CFString
+        var uidSize = UInt32(MemoryLayout<CFString>.stride)
+        withUnsafeMutablePointer(to: &cfUID) { ptr in
+            _ = AudioObjectGetPropertyData(deviceID, &uidAddr, 0, nil, &uidSize, ptr)
+        }
+        let uid = cfUID as String
+        return uid.isEmpty ? nil : uid
+    }
+
     private func createAggregateDevice() throws {
         let uid = UUID().uuidString
+
+        // An aggregate device needs at least one physical sub-device to start.
+        // We add the default output device so CoreAudio can route tap audio through it.
+        var subDeviceList: [[String: Any]] = []
+        if let outputUID = defaultOutputDeviceUID() {
+            subDeviceList = [[kAudioSubDeviceUIDKey: outputUID]]
+            log("[AudioCapture] aggregate sub-device: \(outputUID)")
+        } else {
+            log("[AudioCapture] WARNING: no default output device found; aggregate may fail to start")
+        }
+
         let description: [String: Any] = [
             kAudioAggregateDeviceNameKey: "meeting-buddy-aggregate",
             kAudioAggregateDeviceUIDKey: uid,
-            kAudioAggregateDeviceSubDeviceListKey: [] as CFArray,
-            kAudioAggregateDeviceMasterSubDeviceKey: 0,
+            kAudioAggregateDeviceSubDeviceListKey: subDeviceList as CFArray,
             kAudioAggregateDeviceIsPrivateKey: true,
             kAudioAggregateDeviceIsStackedKey: false,
         ]
@@ -212,22 +259,13 @@ final class AudioTapRecorder {
     // ---------------------------------------------------------------------------
 
     private func setupConverter() throws {
-        // Read the device's input format
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyStreamFormat,
-            mScope: kAudioDevicePropertyScopeInput,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size = UInt32(MemoryLayout<AudioStreamBasicDescription>.stride)
-        var asbd = AudioStreamBasicDescription()
-
-        let status = AudioObjectGetPropertyData(
-            aggregateDeviceID, &addr, 0, nil, &size, &asbd
-        )
-
-        guard status == kAudioHardwareNoError else {
-            log("[AudioCapture] ERROR: couldn't read device format: \(status)")
-            throw NSError(domain: "AudioCapture", code: Int(status))
+        // Use the tap's native format (read during createTap).
+        // Querying kAudioDevicePropertyStreamFormat on the aggregate device fails
+        // when it has no sub-devices — using the tap ASBD directly avoids this.
+        let asbd = tapASBD
+        guard asbd.mSampleRate > 0 && asbd.mChannelsPerFrame > 0 else {
+            log("[AudioCapture] ERROR: tap ASBD is empty, cannot set up converter")
+            throw NSError(domain: "AudioCapture", code: -4)
         }
 
         log("[AudioCapture] source format: "
