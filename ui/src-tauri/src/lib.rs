@@ -1,15 +1,40 @@
 use std::sync::Mutex;
 use tauri::Manager;
+use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
 /// Holds the settings sidecar child process so we can kill it before re-launching.
-struct SettingsChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
+struct SettingsChild(Mutex<Option<CommandChild>>);
 
 /// Holds the native HUD sidecar child process so we can kill it to hide.
-struct HudChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
+struct HudChild(Mutex<Option<CommandChild>>);
 
 /// Holds the backend sidecar child process so we can kill it on app exit.
-struct BackendChild(Mutex<Option<tauri_plugin_shell::process::CommandChild>>);
+struct BackendChild(Mutex<Option<CommandChild>>);
+
+/// Kill any existing sidecar in `state`, then spawn `name` and store the child.
+/// Returns Ok(()) on success, Err with message on failure.
+fn spawn_sidecar(
+    app: &tauri::AppHandle,
+    name: &str,
+    state: &Mutex<Option<CommandChild>>,
+) -> Result<(), String> {
+    if let Some(old) = state.lock().unwrap().take() {
+        let _ = old.kill();
+        // Intentionally avoid sleeping here: this function may be called from UI event handlers.
+        // If we need a delay to avoid races, handle it asynchronously at the call site.
+    }
+    match app.shell().sidecar(name) {
+        Ok(cmd) => match cmd.spawn() {
+            Ok((_rx, child)) => {
+                *state.lock().unwrap() = Some(child);
+                Ok(())
+            }
+            Err(e) => Err(format!("Failed to spawn {name}: {e}")),
+        },
+        Err(e) => Err(format!("Sidecar {name} not found: {e}")),
+    }
+}
 
 #[tauri::command]
 fn get_backend_url() -> String {
@@ -302,20 +327,12 @@ pub fn run() {
             app.manage(HudChild(Mutex::new(None)));
 
             // Spawn native HUD sidecar on startup (best-effort)
-
-            match app.handle().shell().sidecar("MeetingBuddyHUD") {
-                Ok(cmd) => match cmd.spawn() {
-                    Ok((_rx, child)) => {
-                        if let Some(state) = app.handle().try_state::<HudChild>() {
-                            *state.0.lock().unwrap() = Some(child);
-                        }
-                    }
-
-                    Err(e) => log::error!("[hud] Failed to spawn: {e}"),
-
-                },
-
-                Err(e) => log::error!("[hud] Sidecar not found: {e}"),
+            let app_handle = app.handle();
+            if let Some(state) = app_handle.try_state::<HudChild>() {
+                #[allow(clippy::needless_borrow)]
+                if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
+                    log::error!("[hud] {e}");
+                }
             }
 
             #[cfg(desktop)]
@@ -341,50 +358,26 @@ pub fn run() {
                             }
 
                             if shortcut == &toggle_shortcut {
-                                // Toggle HUD sidecar visibility.
-                                // For now, we model "hide" as kill and "show" as spawn.
+                                // Toggle HUD sidecar visibility: hide = kill, show = spawn.
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
                                     let had_child = state.0.lock().unwrap().take();
                                     if let Some(old_child) = had_child {
                                         let _ = old_child.kill();
-                                    } else {
-                                        match app_handle.shell().sidecar("MeetingBuddyHUD") {
-                                            Ok(cmd) => match cmd.spawn() {
-                                                Ok((_rx, child)) => {
-                                                    *state.0.lock().unwrap() = Some(child);
-                                                }
-                                                Err(e) => log::error!("[hud] Failed to spawn: {e}"),
-                                            },
-                                            Err(e) => log::error!("[hud] Sidecar not found: {e}"),
-                                        }
+                                    } else if let Err(e) = {
+                                        #[allow(clippy::needless_borrow)]
+                                        spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0)
+                                    } {
+                                        log::error!("[hud] {e}");
                                     }
                                 }
                             } else if shortcut == &settings_shortcut {
-                                // Launch native SwiftUI settings app as a sidecar
-
-                                // Kill any existing instance first so only one runs at a time
-
                                 if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
-                                        let _ = old_child.kill();
-
-                                        std::thread::sleep(std::time::Duration::from_millis(150));
+                                    if let Err(e) = {
+                                        #[allow(clippy::needless_borrow)]
+                                        spawn_sidecar(&app_handle, "MeetingBuddySettings", &state.0)
+                                    } {
+                                        log::error!("[settings] {e}");
                                     }
-                                }
-
-                                match app_handle.shell().sidecar("MeetingBuddySettings") {
-                                    Ok(cmd) => match cmd.spawn() {
-                                        Ok((_rx, child)) => {
-                                            if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                                *state.0.lock().unwrap() = Some(child);
-                                            }
-                                        }
-
-                                        Err(e) => log::error!("[settings] Failed to spawn: {e}"),
-
-                                    },
-
-                                    Err(e) => log::error!("[settings] Sidecar not found: {e}"),
                                 }
                             }
 
@@ -436,43 +429,22 @@ pub fn run() {
                                     let had_child = state.0.lock().unwrap().take();
                                     if let Some(old_child) = had_child {
                                         let _ = old_child.kill();
-                                    } else {
-                                        match app_handle.shell().sidecar("MeetingBuddyHUD") {
-                                            Ok(cmd) => match cmd.spawn() {
-                                                Ok((_rx, child)) => {
-                                                    *state.0.lock().unwrap() = Some(child);
-                                                }
-                                                Err(e) => log::error!("[hud] Failed to spawn: {e}"),
-                                            },
-                                            Err(e) => log::error!("[hud] Sidecar not found: {e}"),
-                                        }
+                                    } else if let Err(e) = {
+                                        #[allow(clippy::needless_borrow)]
+                                        spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0)
+                                    } {
+                                        log::error!("[hud] {e}");
                                     }
                                 }
                             }
                             "open_settings" => {
-                                // Kill any existing settings sidecar, then spawn a fresh one
-
                                 if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
-                                        let _ = old_child.kill();
-
-                                        std::thread::sleep(std::time::Duration::from_millis(150));
+                                    if let Err(e) = {
+                                        #[allow(clippy::needless_borrow)]
+                                        spawn_sidecar(&app_handle, "MeetingBuddySettings", &state.0)
+                                    } {
+                                        log::error!("[settings] {e}");
                                     }
-                                }
-
-                                match app_handle.shell().sidecar("MeetingBuddySettings") {
-                                    Ok(cmd) => match cmd.spawn() {
-                                        Ok((_rx, child)) => {
-                                            if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                                *state.0.lock().unwrap() = Some(child);
-                                            }
-                                        }
-
-                                        Err(e) => log::error!("[settings] Failed to spawn: {e}"),
-
-                                    },
-
-                                    Err(e) => log::error!("[settings] Sidecar not found: {e}"),
                                 }
                             }
 
