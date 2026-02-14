@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
 from pathlib import Path
 from subprocess import CalledProcessError, check_output
@@ -911,18 +912,11 @@ class TranscriptWebSocket:
             self._synthesis_in_flight = False
 
     def _try_parse_partial_json(self, text: str) -> str | None:
-        """Try to extract partial one_liner from incomplete JSON."""
+        """Try to extract partial one_liner from incomplete JSON via regex only."""
         try:
-            import json
-            import re
-            # Look for "one_liner": "..." pattern, even if JSON is incomplete
             match = re.search(r'"one_liner"\s*:\s*"([^"]*)"', text)
             if match:
                 return match.group(1)
-            # Try parsing if JSON looks complete enough
-            if text.strip().endswith("}") or '"one_liner"' in text:
-                data = json.loads(text + '"}')  # Try to complete it
-                return data.get("one_liner", "")
         except Exception:
             pass
         return None
