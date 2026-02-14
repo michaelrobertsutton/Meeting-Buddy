@@ -63,3 +63,20 @@ jobs:
         run: |
           cd native/MeetingBuddyHUD
           swift build -c release
+
+  rust_quality:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Rust fmt (Tauri)
+        run: |
+          cd ui/src-tauri
+          cargo fmt --check
+      - name: Rust clippy (Tauri)
+        run: |
+          cd ui/src-tauri
+          export TAURI_CONFIG="$(cat tauri.conf.ci.json)"
+          cargo clippy --all-targets --all-features -- -D warnings
