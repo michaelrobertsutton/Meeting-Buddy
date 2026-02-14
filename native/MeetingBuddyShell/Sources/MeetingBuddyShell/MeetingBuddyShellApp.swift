@@ -13,10 +13,19 @@ struct MeetingBuddyShellApp: App {
         .commands {
             CommandGroup(replacing: .appInfo) {
                 Button("Show HUD") {
-                    hud.show {
-                        ContentView(ws: ws)
+                    hud.show { ContentView(ws: ws) }
+                }
+            }
+
+            CommandGroup(after: .appSettings) {
+                Button("Settings…") {
+                    do {
+                        try SettingsLauncher.launch()
+                    } catch {
+                        ws.settingsError = error.localizedDescription
                     }
                 }
+                .keyboardShortcut(",", modifiers: [.command])
             }
         }
 
