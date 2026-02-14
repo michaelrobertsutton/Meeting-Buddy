@@ -233,7 +233,18 @@ struct HUDStatusBarView: View {
             }
             .onAppear {
                 // Kick off pulse animation (only visible in .connecting)
-                pulse = true
+                pulse = (connectionState == .connecting)
+            }
+            .onChange(of: connectionState) { newValue in
+                // Restart the pulse any time we enter the connecting state.
+                if newValue == .connecting {
+                    pulse = false
+                    DispatchQueue.main.async {
+                        pulse = true
+                    }
+                } else {
+                    pulse = false
+                }
             }
 
             Spacer(minLength: 0)
