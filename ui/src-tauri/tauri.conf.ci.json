@@ -1,0 +1,24 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Meeting Buddy",
+  "version": "0.1.0",
+  "identifier": "com.meetingbuddy.overlay",
+  "build": {
+    "frontendDist": "../dist",
+    "beforeBuildCommand": "npm run build-frontend",
+    "beforeDevCommand": "npm run build-frontend"
+  },
+  "app": {
+    "withGlobalTauri": true,
+    "macOSPrivateApi": true,
+    "windows": [],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": false,
+    "targets": ["app"],
+    "externalBin": []
+  }
+}

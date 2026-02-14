@@ -76,6 +76,8 @@ jobs:
           cd ui/src-tauri
           cargo fmt --check
       - name: Rust clippy (Tauri)
+        env:
+          TAURI_CONFIG: tauri.conf.ci.json
         run: |
           cd ui/src-tauri
           cargo clippy --all-targets --all-features -- -D warnings
