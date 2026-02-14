@@ -36,6 +36,7 @@ class SCKCapture:
         self._reader_thread: threading.Thread | None = None
         self._stderr_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
+        self._diag_lock = threading.Lock()
         self._overflow_count = 0
         self._frames_received = 0
         self._last_frame_time: float | None = None
@@ -70,7 +71,8 @@ class SCKCapture:
                     # Check if process exited
                     exit_code = self._process.poll()
                     if exit_code is not None:
-                        self._process_exit_code = exit_code
+                        with self._diag_lock:
+                            self._process_exit_code = exit_code
                         logger.error(
                             "AudioCapture subprocess ended unexpectedly with exit code %d",
                             exit_code
@@ -91,8 +93,9 @@ class SCKCapture:
                     logger.info("Audio frames received (level: %.3f)", audio_level)
                     first_frame_logged = True
 
-            self._frames_received += 1
-            self._last_frame_time = time.time()
+            with self._diag_lock:
+                self._frames_received += 1
+                self._last_frame_time = time.time()
 
             try:
                 self._queue.put_nowait(samples)
@@ -105,7 +108,8 @@ class SCKCapture:
                     self._queue.put_nowait(samples)
                 except queue.Full:
                     pass
-                self._overflow_count += 1
+                with self._diag_lock:
+                    self._overflow_count += 1
                 if self._overflow_count % 100 == 1:
                     logger.warning(
                         "Audio queue overflow (count: %d), dropping frames",
@@ -214,26 +218,31 @@ class SCKCapture:
     def get_status(self) -> dict:
         """Return diagnostic status information."""
         import time
-        
+
+        with self._diag_lock:
+            frames_received = self._frames_received
+            overflow_count = self._overflow_count
+            last_frame_time = self._last_frame_time
+
         status = {
             "running": self._process is not None and self._process.poll() is None,
-            "frames_received": self._frames_received,
+            "frames_received": frames_received,
             "queue_size": self._queue.qsize(),
-            "overflow_count": self._overflow_count,
+            "overflow_count": overflow_count,
         }
-        
+
         if self._process:
             status["pid"] = self._process.pid
             status["exit_code"] = self._process.poll()
-        
-        if self._last_frame_time:
-            time_since_last_frame = time.time() - self._last_frame_time
+
+        if last_frame_time is not None:
+            time_since_last_frame = time.time() - last_frame_time
             status["seconds_since_last_frame"] = time_since_last_frame
             status["receiving_audio"] = time_since_last_frame < 2.0
         else:
             status["receiving_audio"] = False
-        
+
         if self._stderr_lines:
             status["last_stderr_lines"] = self._stderr_lines[-5:]
-        
+
         return status
