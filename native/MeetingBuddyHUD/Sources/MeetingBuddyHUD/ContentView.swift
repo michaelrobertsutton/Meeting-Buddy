@@ -29,8 +29,14 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
+            Divider()
+                .background(Color.white.opacity(0.08))
+
             // Footer / Status bar
-            StatusBar(connected: ws.connected, error: ws.lastError)
+            HUDStatusBarView(
+                connectionState: ws.connectionState,
+                isPinned: ws.isPinned
+            )
         }
         .frame(width: AppTheme.windowWidth, height: AppTheme.windowHeight)
         .fontDesign(.rounded)
@@ -167,28 +173,80 @@ struct AnswerCard: View {
 
 // MARK: - Status Bar
 
-struct StatusBar: View {
-    let connected: Bool
-    let error: String?
+struct HUDStatusBarView: View {
+    let connectionState: WebSocketClient.ConnectionState
+    let isPinned: Bool
+
+    @State private var pulse: Bool = false
+
+    private var connectionDotColor: Color {
+        switch connectionState {
+        case .connected:
+            return Color(hex: "#66BB6A")
+        case .connecting:
+            return Color(hex: "#FFA726")
+        case .disconnected:
+            return Color(hex: "#EF5350")
+        }
+    }
+
+    private var connectionLabel: String {
+        switch connectionState {
+        case .connected:
+            return "Connected"
+        case .connecting:
+            return "Connecting…"
+        case .disconnected:
+            return "Not connected"
+        }
+    }
 
     var body: some View {
-        HStack {
-            Circle()
-                .fill(connected ? Color.green : Color.red)
-                .frame(width: 6, height: 6)
-
-            Text(connected ? "Connected" : (error ?? "Disconnected"))
+        HStack(spacing: 10) {
+            // Processed locally badge
+            Label("Processed Locally", systemImage: "lock.fill")
                 .font(.caption2)
                 .foregroundStyle(AppTheme.textSecondary)
+                .padding(.vertical, 4)
+                .padding(.horizontal, 8)
+                .background(
+                    Capsule().fill(AppTheme.accentBlue.opacity(0.10))
+                )
 
-            Spacer()
+            // Connection status
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(connectionDotColor)
+                    .frame(width: 6, height: 6)
+                    .scaleEffect(connectionState == .connecting && pulse ? 1.35 : 1.0)
+                    .opacity(connectionState == .connecting && pulse ? 0.55 : 1.0)
+                    .animation(
+                        connectionState == .connecting
+                        ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                        : .default,
+                        value: pulse
+                    )
 
-            Text("Alt+Space to toggle")
-                .font(.caption2)
-                .foregroundStyle(AppTheme.textSecondary.opacity(0.5))
+                Text(connectionLabel)
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .onAppear {
+                // Kick off pulse animation (only visible in .connecting)
+                pulse = true
+            }
+
+            Spacer(minLength: 0)
+
+            if isPinned {
+                Label("Pinned", systemImage: "pin.fill")
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.accentBlue)
+                    .transition(.opacity)
+            }
         }
-        .padding(.horizontal, AppTheme.margin)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 16)
+        .frame(height: 28)
         .background(Color.black.opacity(0.15))
     }
 }
