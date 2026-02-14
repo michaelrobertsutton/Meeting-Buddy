@@ -315,6 +315,7 @@ struct SynthesisCardView: View {
                 }
             }
 
+            let hasError = (error?.isEmpty == false)
             if let err = error, !err.isEmpty {
                 Text(err)
                     .font(.body)
@@ -328,7 +329,7 @@ struct SynthesisCardView: View {
                     .font(.body)
                     .italic()
                     .foregroundStyle(AppTheme.accentBlue)
-            } else {
+            } else if !hasError {
                 if let one = answer?.one_liner, !one.isEmpty {
                     Text(one)
                         .font(.body)
