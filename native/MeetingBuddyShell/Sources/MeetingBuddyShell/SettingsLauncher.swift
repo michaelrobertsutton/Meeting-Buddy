@@ -19,6 +19,29 @@ enum SettingsLauncher {
     ///
     /// Note: this is intentionally best-effort for internal tooling.
     static func launch() throws {
+        // Single-instance behavior: if Settings is already running, bring it to front.
+        // Settings may be launched as a raw executable (not necessarily a .app bundle), so match by executable name.
+        let runningSettings = NSWorkspace.shared.runningApplications.filter { app in
+            let exe = app.executableURL?.lastPathComponent
+            let name = app.localizedName
+
+            if let exe, (exe == "MeetingBuddySettings" || exe.hasPrefix("MeetingBuddySettings-")) {
+                return true
+            }
+
+            // Fallback for app-bundle launches where executableURL may be different.
+            if let name, (name == "MeetingBuddySettings" || name == "Meeting Buddy Settings") {
+                return true
+            }
+
+            return false
+        }
+
+        if let existing = runningSettings.first {
+            existing.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            return
+        }
+
         // Candidate locations (in priority order)
         // 1) Packaged install: Settings sidecar next to the HUD executable.
         // 2) SwiftPM build output (local dev)
@@ -52,9 +75,12 @@ enum SettingsLauncher {
         )
 
         if let exe = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) {
-            let config = NSWorkspace.OpenConfiguration()
-            config.activates = true
-            NSWorkspace.shared.openApplication(at: exe, configuration: config)
+            // Launch the Settings binary as a subprocess. Do NOT use openApplication(at:configuration:)
+            // — that API is for .app bundles; for a raw executable macOS opens a terminal.
+            let process = Process()
+            process.executableURL = exe
+            process.arguments = []
+            try process.run()
             return
         }
 

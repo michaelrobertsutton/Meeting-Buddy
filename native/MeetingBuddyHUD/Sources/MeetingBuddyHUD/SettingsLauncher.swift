@@ -10,6 +10,29 @@ enum SettingsLauncher {
     }
 
     static func launch() throws {
+        // Single-instance behavior: if Settings is already running, bring it to front.
+        // Settings is a raw executable (not necessarily a .app bundle), so we match by executable name.
+        let runningSettings = NSWorkspace.shared.runningApplications.filter { app in
+            let exe = app.executableURL?.lastPathComponent
+            let name = app.localizedName
+
+            if let exe, (exe == "MeetingBuddySettings" || exe.hasPrefix("MeetingBuddySettings-")) {
+                return true
+            }
+
+            // Fallback for app-bundle launches where executableURL may be different.
+            if let name, (name == "MeetingBuddySettings" || name == "Meeting Buddy Settings") {
+                return true
+            }
+
+            return false
+        }
+
+        if let existing = runningSettings.first {
+            existing.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+            return
+        }
+
         var candidates: [URL] = []
 
         if let bundled = bundledSettingsExecutable() {
