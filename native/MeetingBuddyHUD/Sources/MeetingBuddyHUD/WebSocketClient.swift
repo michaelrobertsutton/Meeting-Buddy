@@ -3,6 +3,13 @@ import Combine
 
 final class WebSocketClient: ObservableObject {
 
+    private static func transcriptFingerprint(_ segs: [TranscriptSegment]) -> String {
+        // Key idle detection off actual transcript advancement, not message receipt.
+        // Use the last segment’s text plus count as a cheap fingerprint.
+        let last = segs.last?.text ?? ""
+        return "\(segs.count)|\(last)"
+    }
+
     enum ConnectionState: Equatable {
         case connected
         case connecting
@@ -16,6 +23,8 @@ final class WebSocketClient: ObservableObject {
     @Published var isPinned: Bool = false
 
     @Published var segments: [TranscriptSegment] = []
+    @Published var lastTranscriptAt: Date? = nil
+    private var lastTranscriptFingerprint: String = ""
     @Published var activeQuestion: String = ""
     @Published var oneLiner: String = ""
     @Published var activeAnswer: ActiveAnswer? = nil
@@ -130,7 +139,14 @@ final class WebSocketClient: ObservableObject {
 
         if let msg = try? JSONDecoder().decode(BackendMessage.self, from: data) {
             DispatchQueue.main.async {
-                if let segs = msg.segments { self.segments = segs }
+                if let segs = msg.segments {
+                    let fp = Self.transcriptFingerprint(segs)
+                    if fp != self.lastTranscriptFingerprint {
+                        self.lastTranscriptFingerprint = fp
+                        self.lastTranscriptAt = Date()
+                    }
+                    self.segments = segs
+                }
                 self.activeQuestion = msg.active_question ?? self.activeQuestion
                 self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner
                 if let ans = msg.active_answer { self.activeAnswer = ans }
