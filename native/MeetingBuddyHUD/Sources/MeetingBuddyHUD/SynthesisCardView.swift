@@ -1,4 +1,5 @@
 import SwiftUI
+import MeetingBuddyProtocol
 
 // MARK: - Synthesis Card
 

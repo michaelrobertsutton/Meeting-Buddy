@@ -9,10 +9,15 @@ let package = Package(
     products: [
         .executable(name: "MeetingBuddyHUD", targets: ["MeetingBuddyHUD"])
     ],
+    dependencies: [
+        .package(path: "../MeetingBuddyProtocol")
+    ],
     targets: [
         .executableTarget(
             name: "MeetingBuddyHUD",
-            dependencies: [],
+            dependencies: [
+                .product(name: "MeetingBuddyProtocol", package: "MeetingBuddyProtocol")
+            ],
             path: "Sources/MeetingBuddyHUD"
         )
     ]
