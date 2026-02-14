@@ -91,11 +91,11 @@ pub fn run() {
             // --- Spawn the Python backend sidecar ---
             let app_handle = app.handle().clone();
             let shell = app.shell();
-            
+
             // Try to spawn with retry logic
             let mut retries = 3;
             let mut spawned = false;
-            
+
             while retries > 0 && !spawned {
                 match shell.sidecar("meeting-buddy-backend") {
                     Ok(command) => {
