@@ -50,6 +50,7 @@ class TranscriptWebSocket:
         self._login_server = None
         self._clients: set[ServerConnection] = set()
         self._server = None
+        self._broadcast_task: asyncio.Task | None = None
         self._last_question: str | None = None
         self._active_answer: dict | None = None
         self._synthesis_in_flight: bool = False
@@ -73,10 +74,18 @@ class TranscriptWebSocket:
             self.config.port,
         )
         logger.info("WebSocket server listening on ws://%s:%d", self.config.host, self.config.port)
-        asyncio.create_task(self._broadcast_loop())
+        self._broadcast_task = asyncio.create_task(self._broadcast_loop())
 
     async def stop(self) -> None:
         """Stop the WebSocket server."""
+        if self._broadcast_task:
+            self._broadcast_task.cancel()
+            try:
+                await self._broadcast_task
+            except asyncio.CancelledError:
+                pass
+            finally:
+                self._broadcast_task = None
         if self._server:
             self._server.close()
             await self._server.wait_closed()
