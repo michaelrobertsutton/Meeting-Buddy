@@ -26,6 +26,15 @@ Agent/area labels (optional but recommended):
 - `area:ui` — UI/Tauri work
 - `area:ingest` — ingestion/retrieval work
 
+## Permissions
+
+Meeting Buddy requires **Screen Recording** (and optionally Microphone) on macOS. Permissions are documented in one place:
+
+- **In-app:** Meeting Buddy Settings → **Permissions** (opens the relevant System Settings panes via deep links).
+- **README:** Prerequisites section describes Screen Recording and points to Settings → Permissions.
+
+When adding or changing permission requirements, update both the Settings Permissions view and the README.
+
 ## Local dev quality tools (recommended)
 
 We use `ruff` + `pytest` in CI. For the best experience locally, install pre-commit:

@@ -1,9 +1,11 @@
 import SwiftUI
+import AppKit
 
 enum SettingsSection: String, CaseIterable, Identifiable {
     case general = "General"
     case documents = "Documents"
     case account = "Account"
+    case permissions = "Permissions"
 
     var id: String { rawValue }
 
@@ -12,6 +14,7 @@ enum SettingsSection: String, CaseIterable, Identifiable {
         case .general: return "gearshape"
         case .documents: return "doc.text.magnifyingglass"
         case .account: return "person.crop.circle"
+        case .permissions: return "lock.shield"
         }
     }
 }
@@ -37,6 +40,8 @@ struct SettingsWindow: View {
                     DocumentsView()
                 case .account:
                     AccountView()
+                case .permissions:
+                    PermissionsView()
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

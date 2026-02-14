@@ -33,6 +33,7 @@ All audio and transcript data stays on your device. Only the active question + r
 - **Screen Recording permission**:
   - **Bundled app**: Grant permission to "Meeting Buddy" (System Settings > Privacy & Security > Screen Recording)
   - **Development mode**: Grant permission to Terminal.app (System Settings > Privacy & Security > Screen Recording)
+  - You can open the relevant System Settings panes from **Meeting Buddy → Settings → Permissions**.
 
 No virtual audio driver needed — Meeting Buddy uses ScreenCaptureKit to capture system audio directly.
 
