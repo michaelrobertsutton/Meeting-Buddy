@@ -463,13 +463,20 @@ final class AudioTapRecorder {
         }
 
         if convStatus == .error {
+            OSAtomicIncrement64(&emptyCallbackCount)
             return
         }
 
-        guard outBuffer.frameLength > 0 else { return }
+        guard outBuffer.frameLength > 0 else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
 
         // Write Int16 samples to stdout
-        guard let int16Ptr = outBuffer.int16ChannelData?[0] else { return }
+        guard let int16Ptr = outBuffer.int16ChannelData?[0] else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
         let byteCount = Int(outBuffer.frameLength)
             * Int(outFmt.streamDescription.pointee.mBytesPerFrame)
         let rawData = Data(bytes: int16Ptr, count: byteCount)
