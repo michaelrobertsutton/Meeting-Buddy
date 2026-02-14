@@ -73,6 +73,16 @@ class ActiveQuestionExtractor:
         return self._current_question
 
     @property
+    def is_manual_override(self) -> bool:
+        """Whether a manual question override is active."""
+        return self._manual_question is not None
+
+    @property
+    def manual_question(self) -> str | None:
+        """The manually set question, or None if auto-detecting."""
+        return self._manual_question
+
+    @property
     def question_history(self) -> list[dict]:
         """Return question history with staleness flags and ranked by score."""
         now = time.monotonic()
