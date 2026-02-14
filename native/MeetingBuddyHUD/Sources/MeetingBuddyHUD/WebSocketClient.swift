@@ -48,6 +48,8 @@ final class WebSocketClient: ObservableObject {
     private var reconnectAttempt: Int = 0
     private var reconnectWorkItem: DispatchWorkItem?
 
+    private var backendLaunchAttempted: Bool = false
+
     init(url: URL = URL(string: "ws://localhost:8765")!) {
         self.url = url
     }
@@ -110,6 +112,14 @@ final class WebSocketClient: ObservableObject {
                     self.connectionState = .disconnected
                     self.lastError = err.localizedDescription
                 }
+
+                // If HUD is launched without the Tauri process manager, nothing may be
+                // listening on localhost:8765. Try a best-effort backend launch once.
+                if !self.backendLaunchAttempted {
+                    self.backendLaunchAttempted = true
+                    BackendLauncher.launchIfAvailable()
+                }
+
                 self.scheduleReconnect()
 
             case .success(let message):
