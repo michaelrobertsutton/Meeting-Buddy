@@ -55,6 +55,8 @@ struct HUDToolbarView: View {
     @State private var hoveringSettings: Bool = false
     @State private var hoveringPin: Bool = false
 
+    @State private var lastProjectSelection: String = ""
+
     var body: some View {
         ZStack {
             // Drag region behind the toolbar content
@@ -73,7 +75,13 @@ struct HUDToolbarView: View {
                 .pickerStyle(.menu)
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(AppTheme.textPrimary)
+                .onAppear {
+                    lastProjectSelection = ws.activeProject
+                }
                 .onChange(of: ws.activeProject) { newValue in
+                    // Avoid switching projects during initial bootstrap / state sync.
+                    guard newValue != lastProjectSelection else { return }
+                    lastProjectSelection = newValue
                     Task { await ws.switchProject(name: newValue) }
                 }
 
