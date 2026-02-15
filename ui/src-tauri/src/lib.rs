@@ -483,6 +483,9 @@ pub fn run() {
 
                 let toggle_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
 
+                let settings_shortcut = Shortcut::new(Some(Modifiers::META), Code::Comma);
+
+                let hide_shortcut = Shortcut::new(Some(Modifiers::META), Code::KeyH);
 
                 let app_handle = app.handle().clone();
 
@@ -508,7 +511,17 @@ pub fn run() {
                                         log::error!("[hud] {e}");
                                     }
                                 }
-                           
+                            } else if shortcut == &settings_shortcut {
+                                if let Err(e) = open_settings_window(app_handle.clone()) {
+                                    log::error!("[settings] shortcut: {e}");
+                                }
+                            } else if shortcut == &hide_shortcut {
+                                // Cmd+H — Hide (like standard Mac apps): hide the HUD.
+                                if let Some(state) = app_handle.try_state::<HudChild>() {
+                                    if let Some(child) = state.0.lock().unwrap().take() {
+                                        let _ = child.kill();
+                                    }
+                                }
                             }
 
                         })
@@ -519,6 +532,9 @@ pub fn run() {
 
                 app.global_shortcut().register(toggle_shortcut)?;
 
+                app.global_shortcut().register(settings_shortcut)?;
+
+                app.global_shortcut().register(hide_shortcut)?;
             }
 
             // --- Menu bar tray icon (Issue #101) ---
