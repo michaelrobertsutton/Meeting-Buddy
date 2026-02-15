@@ -9,7 +9,7 @@ struct GeneralView: View {
 
     var body: some View {
         Form {
-            Section("Active Project") {
+            Section("Project Management") {
                 if store.projects.isEmpty {
                     Text("No projects — create one below")
                         .foregroundStyle(.secondary)
@@ -54,26 +54,19 @@ struct GeneralView: View {
                 }
             }
 
-            GroupBox("Keyboard Shortcuts") {
-                Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
-                    GridRow {
-                        Text("Alt+Space").monospaced()
-                        Text("Toggle overlay")
-                    }
-                    GridRow {
-                        Text("Cmd+,").monospaced()
-                        Text("Open Settings")
-                    }
-                    GridRow {
-                        Text("Cmd+K").monospaced()
-                        Text("Clear session")
-                    }
-                    GridRow {
-                        Text("Cmd+Shift+P").monospaced()
-                        Text("Pin/unpin answer")
-                    }
+            Section("Keyboard Shortcuts") {
+                LabeledContent("Toggle overlay") {
+                    Text("Alt+Space").monospaced().foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+                LabeledContent("Open Settings") {
+                    Text("Cmd+,").monospaced().foregroundStyle(.secondary)
+                }
+                LabeledContent("Clear session") {
+                    Text("Cmd+K").monospaced().foregroundStyle(.secondary)
+                }
+                LabeledContent("Pin/unpin answer") {
+                    Text("Cmd+Shift+P").monospaced().foregroundStyle(.secondary)
+                }
             }
         }
         .formStyle(.grouped)

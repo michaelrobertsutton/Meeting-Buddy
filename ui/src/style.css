@@ -117,7 +117,8 @@ body {
 
 body.manual-question #quick-question {
     border-color: color-mix(in srgb, var(--mb-accent) 55%, transparent);
-    background: color-mix(in srgb, var(--mb-accent) 10%, transparent);
+    background: rgba(255, 255, 255, 0.20);
+    caret-color: var(--mb-accent);
 }
 
 #header-project:hover {

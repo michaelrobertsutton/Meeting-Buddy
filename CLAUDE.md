@@ -182,6 +182,10 @@ Use `tasks/todo.md` and `tasks/lessons.md` (local only — `tasks/` is gitignore
 
 ## GitHub issue + PR workflow (required)
 
+> **HARD RULE — no exceptions, not even for "small" fixes:**
+> Every code change must go through a branch + PR. Never commit directly to `main`.
+> No branch → no commit → no fix. Period.
+
 **Source of truth:** [CONTRIBUTING.md](CONTRIBUTING.md). When working on a GitHub issue:
 
 ### CI (personal repo): opt-in for PRs

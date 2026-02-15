@@ -9,7 +9,7 @@ struct ContentView: View {
             HUDToolbarView(ws: ws)
 
             Divider()
-                .background(Color.white.opacity(0.08))
+                .background(Color.white.opacity(0.10))
 
             // Main content area — single continuous material (no inner rounded box; avoids double-corner/notch)
             VStack(spacing: AppTheme.spacing) {
@@ -73,7 +73,7 @@ struct ContentView: View {
             }
 
             Divider()
-                .background(Color.white.opacity(0.08))
+                .background(Color.white.opacity(0.10))
 
             // Footer / Status bar
             HUDStatusBarView(

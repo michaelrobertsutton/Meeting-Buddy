@@ -71,7 +71,7 @@ final class HUDPanelController {
         let rootView = AnyView(
             ZStack {
                 // Background material — fills the content view; window chrome clips corners
-                VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
+                VisualEffectView(material: .underWindowBackground, blendingMode: .behindWindow)
 
                 content()
             }

@@ -28,7 +28,7 @@ struct SettingsWindow: View {
         NavigationSplitView {
             List(SettingsSection.allCases, selection: $selection) { section in
                 let isActive = (selection == section)
-                Label(section.rawValue, systemImage: isActive ? section.systemImage + ".fill" : section.systemImage)
+                Label(section.rawValue, systemImage: section.systemImage)
                     .symbolVariant(isActive ? .fill : .none)
                     .tag(section)
             }

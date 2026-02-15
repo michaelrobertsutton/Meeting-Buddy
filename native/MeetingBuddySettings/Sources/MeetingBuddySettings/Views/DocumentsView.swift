@@ -6,6 +6,10 @@ struct DocumentsView: View {
     @EnvironmentObject var store: SettingsStore
     @State private var selection = Set<DocInfo.ID>()
     @State private var sortOrder: [KeyPathComparator<DocInfo>] = [KeyPathComparator(\.title, order: .forward)]
+    @State private var showPriorityInfo = false
+    @AppStorage("defaultDocPriority") private var defaultDocPriority: String = "normal"
+
+    private let priorityOptions = ["low", "normal", "high"]
 
     private var sortedDocs: [DocInfo] {
         store.docs.sorted(using: sortOrder)
@@ -62,11 +66,25 @@ struct DocumentsView: View {
                     }
                     .width(100)
                     TableColumn("Priority") { doc in
-                        Text((doc.priority ?? "normal").capitalized)
+                        Menu {
+                            ForEach(priorityOptions, id: \.self) { option in
+                                Button(option.capitalized) {
+                                    Task { await store.updateDocMeta(title: doc.title, priority: option) }
+                                }
+                            }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text((doc.priority ?? "normal").capitalized)
+                                Image(systemName: "chevron.up.chevron.down")
+                                    .font(.caption2)
+                            }
                             .foregroundStyle(.secondary)
+                        }
+                        .menuStyle(.borderlessButton)
                     }
-                    .width(100)
+                    .width(110)
                 }
+                .tableStyle(.inset)
                 .contextMenu {
                     if let single = selection.first {
                         Button("Remove Document", role: .destructive) {
@@ -76,6 +94,49 @@ struct DocumentsView: View {
                     }
                 }
             }
+
+            Divider()
+
+            // Footer: Default Priority picker + info
+            HStack(spacing: 8) {
+                Text("Default Priority for new docs:")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $defaultDocPriority) {
+                    ForEach(priorityOptions, id: \.self) { option in
+                        Text(option.capitalized).tag(option)
+                    }
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 90)
+
+                Button {
+                    showPriorityInfo.toggle()
+                } label: {
+                    Image(systemName: "info.circle")
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .popover(isPresented: $showPriorityInfo, arrowEdge: .top) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Document Priority & RAG Weighting")
+                            .font(.headline)
+                        Text("Priority controls how strongly a document influences synthesis answers.\n\n• High — chunks from this doc score a 2× boost when retrieved, making them appear more often in answers.\n• Normal — standard retrieval weight.\n• Low — chunks are retrieved with half weight; useful for background or reference material you want available but not dominant.")
+                            .font(.body)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: 320)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(.bar)
         }
         .navigationTitle("Documents")
         .toolbar {
