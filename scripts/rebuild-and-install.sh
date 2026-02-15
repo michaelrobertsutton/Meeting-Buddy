@@ -10,7 +10,8 @@ BUNDLE="$REPO_ROOT/ui/src-tauri/target/release/bundle/macos/$APP_NAME.app"
 echo "==> Pulling latest main…"
 cd "$REPO_ROOT"
 git checkout main
-git pull
+git stash --include-untracked 2>/dev/null || true
+git pull --rebase
 
 echo "==> Writing project_root pointer for sidecar…"
 mkdir -p "$HOME/.meeting-buddy"
