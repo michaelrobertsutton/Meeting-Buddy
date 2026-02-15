@@ -66,6 +66,9 @@ class TranscriptWebSocket:
         # Pinned/bookmarked answers (session state)
         self._pinned_answers: list[dict] = []  # [{id, question, answer, timestamp}]
         self._pin_seq: int = 0
+        # Pause/listening: when False, ASR is paused and synthesis is not triggered
+        self._listening: bool = True
+        self._streaming = None  # Set by main: StreamingASR instance
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -156,6 +159,7 @@ class TranscriptWebSocket:
             "export_session": self._cmd_export_session,
             "get_audio_status": self._cmd_get_audio_status,
             "get_status": self._cmd_get_status,
+            "set_listening": self._cmd_set_listening,
         }
 
         handler = handlers.get(cmd)
@@ -224,6 +228,22 @@ class TranscriptWebSocket:
                 "command_params_envelope": True,
             },
         }
+
+    async def _cmd_set_listening(self, params: dict) -> dict:
+        """Pause or resume listening (ASR + synthesis trigger)."""
+        listening = params.get("listening", True)
+        if not isinstance(listening, bool):
+            listening = bool(listening)
+        if self._listening == listening:
+            return {"listening": self._listening}
+        self._listening = listening
+        if self._streaming:
+            if self._listening:
+                self._streaming.resume()
+            else:
+                self._streaming.pause()
+        await self._broadcast_event({"type": "listening_update", "listening": self._listening})
+        return {"listening": self._listening}
 
     async def _cmd_set_api_key(self, params: dict) -> dict:
         key = params.get("key", "").strip()
@@ -790,8 +810,8 @@ class TranscriptWebSocket:
             
             self._last_question = question
 
-            if question_changed and question and self._synthesis_engine:
-                # Only auto-trigger synthesis when not in manual mode
+            if question_changed and question and self._synthesis_engine and self._listening:
+                # Only auto-trigger synthesis when not in manual mode and listening
                 if not self._synthesis_in_flight and self._extractor and not self._extractor.is_manual_override:
                     logger.info("[WebSocket] Triggering synthesis for question: %s", question)
                     asyncio.create_task(self._run_synthesis(question))
@@ -976,4 +996,5 @@ class TranscriptWebSocket:
         # Always include Q&A history so new clients get full session context
         msg["qa_history"] = list(self._qa_history)
         msg["pinned"] = list(self._pinned_answers)
+        msg["listening"] = self._listening
         return msg

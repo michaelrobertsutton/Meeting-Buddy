@@ -57,6 +57,7 @@ class StreamingASR:
         self._state = _State.IDLE
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._paused = False
 
         # Pre-speech ring buffer (keeps last N frames before speech detected)
         pre_speech_frames = max(1, int(
@@ -98,6 +99,20 @@ class StreamingASR:
             self._thread = None
         logger.info("Streaming ASR stopped")
 
+    def pause(self) -> None:
+        """Pause processing: keep reading frames but do not run VAD/ASR."""
+        self._paused = True
+        logger.info("Streaming ASR paused")
+
+    def resume(self) -> None:
+        """Resume processing."""
+        self._paused = False
+        logger.info("Streaming ASR resumed")
+
+    @property
+    def is_paused(self) -> bool:
+        return self._paused
+
     def _elapsed(self) -> float:
         """Seconds since start."""
         return time.monotonic() - self._start_wall_time
@@ -107,6 +122,8 @@ class StreamingASR:
         while not self._stop_event.is_set():
             frame = self.capture.read_frame(timeout=0.5)
             if frame is None:
+                continue
+            if self._paused:
                 continue
 
             if self._state == _State.IDLE:

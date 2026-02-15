@@ -8,6 +8,7 @@ struct HUDToolbarView: View {
     @State private var manualQuestion: String = ""
     @FocusState private var isQuestionFocused: Bool
 
+    @State private var hoveringListen: Bool = false
     @State private var hoveringExport: Bool = false
     @State private var hoveringSettings: Bool = false
     @State private var hoveringPin: Bool = false
@@ -16,7 +17,7 @@ struct HUDToolbarView: View {
 
     var body: some View {
         ZStack {
-            // Drag region behind the toolbar content
+            // Drag region behind the toolbar content (so button hits are not stolen)
             WindowDragRegion()
 
             HStack(spacing: 12) {
@@ -81,6 +82,14 @@ struct HUDToolbarView: View {
                 // Right: icon buttons
                 HStack(spacing: 10) {
                     toolbarButton(
+                        systemName: ws.isListening ? "pause.fill" : "play.fill",
+                        help: ws.isListening ? "Pause listening" : "Resume listening",
+                        hovering: $hoveringListen
+                    ) {
+                        Task { await ws.setListening(!ws.isListening) }
+                    }
+
+                    toolbarButton(
                         systemName: "square.and.arrow.up",
                         help: "Export",
                         hovering: $hoveringExport
@@ -94,9 +103,11 @@ struct HUDToolbarView: View {
                         hovering: $hoveringSettings
                     ) {
                         do {
+                            print("[Settings] gear clicked, launching...")
                             try SettingsLauncher.launch()
+                            print("[Settings] launch() returned OK")
                         } catch {
-                            // best-effort; surface error via lastError
+                            print("[Settings] launch() threw: \(error)")
                             ws.lastError = error.localizedDescription
                         }
                     }
