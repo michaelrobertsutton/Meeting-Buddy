@@ -63,7 +63,6 @@ final class HUDPanelController {
     func show<Content: View>(initialFloating: Bool, @ViewBuilder content: () -> Content) {
         if panel == nil {
             panel = HUDPanel()
-            panel?.setFloating(initialFloating)
             closeDelegate = HUDPanelCloseDelegate { [weak self] in
                 self?.hide()
             }
@@ -72,6 +71,10 @@ final class HUDPanelController {
         }
 
         guard let panel = panel else { return }
+
+        // Always apply the desired floating level on show so the persisted state
+        // is respected across hide/show cycles.
+        panel.setFloating(initialFloating)
 
         let rootView = AnyView(
             ZStack {
