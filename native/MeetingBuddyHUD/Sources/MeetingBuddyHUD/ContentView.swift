@@ -43,7 +43,9 @@ struct ContentView: View {
             // Footer / Status bar
             HUDStatusBarView(
                 connectionState: ws.connectionState,
-                isPinned: ws.isPinned
+                isPinned: ws.isPinned,
+                lastError: ws.lastError,
+                lastExportPath: ws.lastExportPath
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

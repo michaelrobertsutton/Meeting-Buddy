@@ -79,7 +79,7 @@ struct HUDToolbarView: View {
                 Spacer(minLength: 0)
 
 
-                // Right: icon buttons
+                // Right: icon buttons (zIndex so hits aren't taken by WindowDragRegion)
                 HStack(spacing: 10) {
                     toolbarButton(
                         systemName: ws.isListening ? "pause.fill" : "play.fill",
@@ -91,7 +91,7 @@ struct HUDToolbarView: View {
 
                     toolbarButton(
                         systemName: "square.and.arrow.up",
-                        help: "Export",
+                        help: "Export session to file (~/.meeting-buddy/exports)",
                         hovering: $hoveringExport
                     ) {
                         Task { await ws.exportSession(format: "markdown") }
@@ -114,7 +114,7 @@ struct HUDToolbarView: View {
 
                     toolbarButton(
                         systemName: ws.isPinned ? "pin.fill" : "pin",
-                        help: "Pin",
+                        help: "Pin current answer to list",
                         hovering: $hoveringPin
                     ) {
                         Task { await ws.togglePin() }
@@ -125,12 +125,14 @@ struct HUDToolbarView: View {
                     } label: {
                         Image(systemName: "chevron.down.circle")
                             .frame(width: 28, height: 28)
+                            .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(AppTheme.textSecondary)
                     .opacity(0.85)
-                    .help("Hide (Alt+Space)")
+                    .help("Hide (Cmd+H). Alt+Space to show again.")
                 }
+                .zIndex(1)
             }
             .padding(.horizontal, 16)
         }
@@ -146,6 +148,7 @@ struct HUDToolbarView: View {
         Button(action: action) {
             Image(systemName: systemName)
                 .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .foregroundStyle(AppTheme.accentBlue)

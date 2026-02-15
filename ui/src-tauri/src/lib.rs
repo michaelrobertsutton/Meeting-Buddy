@@ -88,6 +88,26 @@ fn get_backend_url() -> String {
 }
 
 #[tauri::command]
+fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
+    use tauri::WebviewWindowBuilder;
+    // Close any existing settings window first
+    if let Some(w) = app.get_webview_window("settings") {
+        let _ = w.close();
+    }
+    WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App("settings.html".into()))
+        .title("Meeting Buddy Settings")
+        .inner_size(860.0, 600.0)
+        .resizable(true)
+        .decorations(true)
+        .build()
+        .map_err(|e| {
+            log::error!("[settings] failed to open window: {e}");
+            e.to_string()
+        })?;
+    Ok(())
+}
+
+#[tauri::command]
 fn dismiss_onboarding() -> Result<(), String> {
     // This command can be called from anywhere to dismiss the onboarding overlay
 
@@ -465,6 +485,8 @@ pub fn run() {
 
                 let settings_shortcut = Shortcut::new(Some(Modifiers::META), Code::Comma);
 
+                let hide_shortcut = Shortcut::new(Some(Modifiers::META), Code::KeyH);
+
                 let app_handle = app.handle().clone();
 
                 app.handle().plugin(
@@ -490,12 +512,14 @@ pub fn run() {
                                     }
                                 }
                             } else if shortcut == &settings_shortcut {
-                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                    if let Err(e) = {
-                                        #[allow(clippy::needless_borrow)]
-                                        spawn_sidecar(&app_handle, "MeetingBuddySettings", &state.0)
-                                    } {
-                                        log::error!("[settings] {e}");
+                                if let Err(e) = open_settings_window(app_handle.clone()) {
+                                    log::error!("[settings] shortcut: {e}");
+                                }
+                            } else if shortcut == &hide_shortcut {
+                                // Cmd+H — Hide (like standard Mac apps): hide the HUD.
+                                if let Some(state) = app_handle.try_state::<HudChild>() {
+                                    if let Some(child) = state.0.lock().unwrap().take() {
+                                        let _ = child.kill();
                                     }
                                 }
                             }
@@ -509,6 +533,8 @@ pub fn run() {
                 app.global_shortcut().register(toggle_shortcut)?;
 
                 app.global_shortcut().register(settings_shortcut)?;
+
+                app.global_shortcut().register(hide_shortcut)?;
             }
 
             // --- Menu bar tray icon (Issue #101) ---
@@ -521,13 +547,15 @@ pub fn run() {
 
                 let toggle_item = MenuItem::with_id(app, "toggle_hud", "Toggle HUD", true, Some("Alt+Space"))?;
 
+                let hide_item = MenuItem::with_id(app, "hide_hud", "Hide Meeting Buddy", true, Some("Cmd+H"))?;
+
                 let settings_item = MenuItem::with_id(app, "open_settings", "Open Settings", true, Some("Cmd+,"))?;
 
                 let export_item = MenuItem::with_id(app, "export", "Export", true, None::<&str>)?;
 
                 let quit_item = MenuItem::with_id(app, "quit", "Quit Meeting Buddy", true, None::<&str>)?;
 
-                let menu = Menu::with_items(app, &[&toggle_item, &settings_item, &export_item, &quit_item])?;
+                let menu = Menu::with_items(app, &[&toggle_item, &hide_item, &settings_item, &export_item, &quit_item])?;
 
                 let _app_handle = app.handle().clone();
 
@@ -557,12 +585,15 @@ pub fn run() {
                                 }
                             }
                             "open_settings" => {
-                                if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                                    if let Err(e) = {
-                                        #[allow(clippy::needless_borrow)]
-                                        ensure_sidecar_running(&app_handle, "MeetingBuddySettings", &state.0)
-                                    } {
-                                        log::error!("[settings] {e}");
+                                if let Err(e) = open_settings_window(app_handle.clone()) {
+                                    log::error!("[settings] tray: {e}");
+                                }
+                            }
+
+                            "hide_hud" => {
+                                if let Some(state) = app_handle.try_state::<HudChild>() {
+                                    if let Some(child) = state.0.lock().unwrap().take() {
+                                        let _ = child.kill();
                                     }
                                 }
                             }
@@ -593,7 +624,7 @@ pub fn run() {
 
         .plugin(tauri_plugin_shell::init())
 
-        .invoke_handler(tauri::generate_handler![get_backend_url, get_backend_diagnostics, check_screen_recording_permission, check_microphone_permission, dismiss_onboarding, open_system_settings_url])
+        .invoke_handler(tauri::generate_handler![get_backend_url, get_backend_diagnostics, check_screen_recording_permission, check_microphone_permission, dismiss_onboarding, open_system_settings_url, open_settings_window])
 
         .build(tauri::generate_context!())
 

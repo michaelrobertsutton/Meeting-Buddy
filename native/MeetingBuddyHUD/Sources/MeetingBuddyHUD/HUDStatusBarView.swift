@@ -5,6 +5,8 @@ import SwiftUI
 struct HUDStatusBarView: View {
     let connectionState: WebSocketClient.ConnectionState
     let isPinned: Bool
+    var lastError: String? = nil
+    var lastExportPath: String? = nil
 
     @State private var pulse: Bool = false
 
@@ -43,24 +45,40 @@ struct HUDStatusBarView: View {
                     Capsule().fill(AppTheme.accentBlue.opacity(0.10))
                 )
 
-            // Connection status
-            HStack(spacing: 6) {
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 6))
-                    .foregroundStyle(connectionDotColor)
-                    .scaleEffect(connectionState == .connecting && pulse ? 1.35 : 1.0)
-                    .opacity(connectionState == .connecting && pulse ? 0.55 : 1.0)
-                    .animation(
-                        connectionState == .connecting
-                        ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
-                        : .default,
-                        value: pulse
-                    )
-                    .imageScale(.small)
+            // Connection status and feedback
+            HStack(spacing: 8) {
+                HStack(spacing: 6) {
+                    Image(systemName: "circle.fill")
+                        .font(.system(size: 6))
+                        .foregroundStyle(connectionDotColor)
+                        .scaleEffect(connectionState == .connecting && pulse ? 1.35 : 1.0)
+                        .opacity(connectionState == .connecting && pulse ? 0.55 : 1.0)
+                        .animation(
+                            connectionState == .connecting
+                            ? .easeInOut(duration: 0.9).repeatForever(autoreverses: true)
+                            : .default,
+                            value: pulse
+                        )
+                        .imageScale(.small)
 
-                Text(connectionLabel)
-                    .font(.caption2)
-                    .foregroundStyle(AppTheme.textSecondary)
+                    Text(connectionLabel)
+                        .font(.caption2)
+                        .foregroundStyle(AppTheme.textSecondary)
+                }
+
+                if let err = lastError, !err.isEmpty {
+                    Text(err)
+                        .font(.caption2)
+                        .foregroundStyle(Color(hex: "#EF5350"))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                } else if let path = lastExportPath {
+                    Text("Exported to \(path)")
+                        .font(.caption2)
+                        .foregroundStyle(Color(hex: "#66BB6A"))
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                }
             }
             .onAppear {
                 // Kick off pulse animation (only visible in .connecting)

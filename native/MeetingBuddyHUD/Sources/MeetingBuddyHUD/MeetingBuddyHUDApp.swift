@@ -14,6 +14,14 @@ struct MeetingBuddyHUDApp: App {
         Settings {
             EmptyView()
         }
+        .commands {
+            CommandGroup(after: .appInfo) {
+                Button("Hide Meeting Buddy") {
+                    NotificationCenter.default.post(name: .meetingBuddyHUDHide, object: nil)
+                }
+                .keyboardShortcut("h", modifiers: .command)
+            }
+        }
     }
 }
 
@@ -59,8 +67,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleSettingsHotkey(event)
         }
         settingsHotkeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleSettingsHotkey(event)
-            return event
+            self?.handleKeyDown(event) ?? event
         }
     }
 
@@ -80,14 +87,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         ws.disconnect()
     }
 
-    private func handleSettingsHotkey(_ event: NSEvent) {
-        guard event.modifierFlags.contains(.command) else { return }
-        guard let chars = event.charactersIgnoringModifiers else { return }
-        guard chars == "," else { return }
+    /// Handle key down; return nil to consume the event, or the event to pass through.
+    private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
+        guard event.modifierFlags.contains(.command) else { return event }
+        guard let chars = event.charactersIgnoringModifiers else { return event }
 
-        DispatchQueue.main.async {
-            try? SettingsLauncher.launch()
+        if chars == "h" || chars == "H" {
+            // Cmd+H — Hide (like standard Mac apps)
+            DispatchQueue.main.async { [weak self] in
+                self?.hudController.hide()
+            }
+            return nil
         }
+        if chars == "," {
+            DispatchQueue.main.async {
+                try? SettingsLauncher.launch()
+            }
+            return nil
+        }
+        return event
+    }
+
+    private func handleSettingsHotkey(_ event: NSEvent) {
+        _ = handleKeyDown(event)
     }
 
     private func toggleHUD() {

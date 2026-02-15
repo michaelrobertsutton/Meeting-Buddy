@@ -19,6 +19,7 @@ final class WebSocketClient: ObservableObject {
 
     @Published var connectionState: ConnectionState = .connecting
     @Published var lastError: String? = nil
+    @Published var lastExportPath: String? = nil
 
     // UI state
     @Published var isPinned: Bool = false
@@ -352,10 +353,22 @@ final class WebSocketClient: ObservableObject {
 
     func exportSession(format: String = "markdown") async {
         do {
-            _ = try await sendCommand("export_session", params: ["format": format])
+            let data = try await sendCommand("export_session", params: ["format": format])
+            if let path = data["path"] as? String {
+                await MainActor.run {
+                    self.lastError = nil
+                    self.lastExportPath = path
+                    // Clear success message after a few seconds
+                    Task { @MainActor in
+                        try? await Task.sleep(nanoseconds: 4_000_000_000)
+                        if self.lastExportPath == path { self.lastExportPath = nil }
+                    }
+                }
+            }
         } catch {
             await MainActor.run {
                 self.lastError = error.localizedDescription
+                self.lastExportPath = nil
             }
         }
     }
@@ -393,6 +406,7 @@ final class WebSocketClient: ObservableObject {
                 // Do NOT send a plain-string answer; let the backend pin its structured active_answer.
                 _ = try await sendCommand("pin_answer", params: params)
             }
+            await MainActor.run { self.lastError = nil }
             await refreshPinned()
         } catch {
             await MainActor.run {
