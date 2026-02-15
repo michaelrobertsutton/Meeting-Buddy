@@ -564,16 +564,18 @@ async function openSettingsWindow() {
     // Prefer the separate Settings window (Phase UI). Fall back to the drawer.
     try {
         const { WebviewWindow } = window.__TAURI__.webviewWindow;
-        let w = WebviewWindow.getByLabel('settings');
-        if (!w) {
-            w = new WebviewWindow('settings', {
-                url: 'settings.html',
-                title: 'Meeting Buddy Settings',
-                width: 860,
-                height: 600,
-                transparent: true,
-            });
+        // Close any existing settings window so it reloads fresh.
+        const existing = WebviewWindow.getByLabel('settings');
+        if (existing) {
+            await existing.close();
         }
+        const w = new WebviewWindow('settings', {
+            url: 'settings.html',
+            title: 'Meeting Buddy Settings',
+            width: 860,
+            height: 600,
+            transparent: true,
+        });
         await w.show();
         await w.setFocus();
         return;

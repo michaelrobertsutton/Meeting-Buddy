@@ -3,10 +3,12 @@
   "identifier": "default",
   "description": "Default capabilities for Meeting Buddy overlay",
   "windows": [
-    "overlay"
+    "overlay",
+    "settings"
   ],
   "permissions": [
     "core:default",
+    "core:webview:allow-create-webview-window",
     "core:window:allow-show",
     "core:window:allow-hide",
     "core:window:allow-close",
