@@ -3,9 +3,7 @@ import AppKit
 
 final class SettingsAppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Suppress dock icon — Settings is a transient panel, not a standalone app.
-        NSApp.setActivationPolicy(.accessory)
-        // Bring to front after suppressing dock presence.
+        // Bring to front (activation policy already set in App.init).
         NSApp.activate(ignoringOtherApps: true)
     }
 }
@@ -14,6 +12,11 @@ final class SettingsAppDelegate: NSObject, NSApplicationDelegate {
 struct MeetingBuddySettingsApp: App {
     @NSApplicationDelegateAdaptor(SettingsAppDelegate.self) var appDelegate
     @StateObject private var store = SettingsStore()
+
+    init() {
+        // Must be set before the run loop starts to prevent the dock icon flash.
+        NSApp.setActivationPolicy(.accessory)
+    }
 
     var body: some Scene {
         WindowGroup("Meeting Buddy Settings") {
