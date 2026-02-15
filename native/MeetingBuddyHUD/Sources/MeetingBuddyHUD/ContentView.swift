@@ -79,7 +79,9 @@ struct ContentView: View {
             HUDStatusBarView(
                 connectionState: ws.connectionState,
                 isPinned: ws.isWindowFloating,
-                lastExportPath: ws.lastExportPath
+                lastExportPath: ws.lastExportPath,
+                ttftMs: ws.lastTTFTms,
+                totalMs: ws.lastTotalMs
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

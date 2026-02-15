@@ -37,6 +37,10 @@ final class WebSocketClient: ObservableObject {
     @Published var synthesisError: String? = nil
     @Published var answerPartialText: String = ""
 
+    // Latency instrumentation
+    @Published var lastTTFTms: Double? = nil
+    @Published var lastTotalMs: Double? = nil
+
     // Projects
     @Published var availableProjects: [String] = []
     @Published var activeProject: String = ""
@@ -199,6 +203,8 @@ final class WebSocketClient: ObservableObject {
                         self.synthesisSearching = true
                         self.synthesisError = nil
                         self.answerPartialText = ""
+                        self.lastTTFTms = nil
+                        self.lastTotalMs = nil
                     case "synthesis_error":
                         self.synthesisSearching = false
                         self.synthesisError = msg.error ?? "Synthesis error"
@@ -207,10 +213,19 @@ final class WebSocketClient: ObservableObject {
                         if let partial = msg.partial_text {
                             self.answerPartialText = partial
                         }
+                        if let ttft = msg.timings?.ttft_ms {
+                            self.lastTTFTms = ttft
+                        }
                     case "answer_update":
                         self.synthesisSearching = false
                         self.synthesisError = nil
                         self.answerPartialText = ""
+                        if let ttft = msg.timings?.ttft_ms {
+                            self.lastTTFTms = ttft
+                        }
+                        if let total = msg.timings?.total_ms {
+                            self.lastTotalMs = total
+                        }
                     case "pinned_update":
                         break
                     default:

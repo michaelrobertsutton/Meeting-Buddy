@@ -77,6 +77,9 @@ public struct BackendMessage: Codable {
     public let protocol_version: Int?
     public let version: Int?
 
+    // Optional latency instrumentation
+    public let timings: LatencyTimings?
+
     // Snapshot / update fields
     public let segments: [TranscriptSegment]?
     public let active_question: String?
@@ -103,6 +106,7 @@ public struct BackendMessage: Codable {
         type: String?,
         protocol_version: Int?,
         version: Int?,
+        timings: LatencyTimings?,
         segments: [TranscriptSegment]?,
         active_question: String?,
         manual_question: Bool?,
@@ -121,6 +125,7 @@ public struct BackendMessage: Codable {
         self.type = type
         self.protocol_version = protocol_version
         self.version = version
+        self.timings = timings
         self.segments = segments
         self.active_question = active_question
         self.manual_question = manual_question

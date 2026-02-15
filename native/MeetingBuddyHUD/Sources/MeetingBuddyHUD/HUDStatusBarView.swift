@@ -6,6 +6,8 @@ struct HUDStatusBarView: View {
     let connectionState: WebSocketClient.ConnectionState
     let isPinned: Bool
     var lastExportPath: String? = nil
+    var ttftMs: Double? = nil
+    var totalMs: Double? = nil
 
     @State private var pulse: Bool = false
 
@@ -79,6 +81,18 @@ struct HUDStatusBarView: View {
             }
 
             Spacer(minLength: 0)
+
+            if let ttftMs {
+                Text(String(format: "TTFT %.0fms", ttftMs))
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+
+            if let totalMs {
+                Text(String(format: "Total %.0fms", totalMs))
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
 
             if isPinned {
                 Label("On Top", systemImage: "pin.fill")

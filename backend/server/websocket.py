@@ -64,6 +64,9 @@ class TranscriptWebSocket(CommandsMixin):
         self._listening: bool = True
         self._streaming = None  # Set by main: StreamingASR instance
 
+        # Latency instrumentation (best-effort; values in milliseconds)
+        self._latency_last: dict | None = None
+
     async def start(self) -> None:
         """Start the WebSocket server."""
         self._server = await serve(
@@ -284,46 +287,72 @@ class TranscriptWebSocket(CommandsMixin):
     async def _run_synthesis(self, question: str) -> None:
         """Run synthesis with streaming and broadcast partial + final results."""
         self._synthesis_in_flight = True
+
+        # Latency instrumentation (monotonic for deltas; wall clock for logs)
+        t0 = time.monotonic()
+        first_delta_ms: float | None = None
+
         # Notify clients that synthesis is in progress
         await self._broadcast_event({"type": "synthesis_searching", "question": question})
         try:
             # Get recent transcript context (last 90 seconds) for disambiguation
             transcript_context = self.buffer.get_recent_text(lookback_seconds=90.0)
-            
+
             # Use streaming synthesis
             full_text = ""
             streamed = False
-            async for delta in self._synthesis_engine.synthesize_stream(question, transcript_context=transcript_context):
+            async for delta in self._synthesis_engine.synthesize_stream(
+                question, transcript_context=transcript_context
+            ):
+                if first_delta_ms is None:
+                    first_delta_ms = round((time.monotonic() - t0) * 1000.0, 1)
                 streamed = True
                 full_text += delta
                 # Try to parse partial JSON for one_liner preview
                 partial_one_liner = self._try_parse_partial_json(full_text)
                 if partial_one_liner:
-                    await self._broadcast_event({
-                        "type": "answer_partial",
-                        "partial_text": partial_one_liner,
-                    })
-            
+                    await self._broadcast_event(
+                        {
+                            "type": "answer_partial",
+                            "partial_text": partial_one_liner,
+                            "timings": {
+                                "ttft_ms": first_delta_ms,
+                            },
+                        }
+                    )
+
             # If no streaming occurred (cached result), fall back to non-streaming
             if not streamed or not full_text:
-                result = await self._synthesis_engine.synthesize(question, transcript_context=transcript_context)
+                result = await self._synthesis_engine.synthesize(
+                    question, transcript_context=transcript_context
+                )
                 if result is not None:
                     answer_dict = result.to_dict()
                     self._active_answer = answer_dict
-                    self._qa_history.append({
-                        "question": question,
-                        "answer": answer_dict,
-                        "timestamp": time.time(),
-                    })
+                    self._qa_history.append(
+                        {
+                            "question": question,
+                            "answer": answer_dict,
+                            "timestamp": time.time(),
+                        }
+                    )
                     max_history = 100
                     if len(self._qa_history) > max_history:
                         self._qa_history = self._qa_history[-max_history:]
-                    await self._broadcast_answer()
+
+                    total_ms = round((time.monotonic() - t0) * 1000.0, 1)
+                    self._latency_last = {
+                        "question": question,
+                        "ttft_ms": first_delta_ms,
+                        "total_ms": total_ms,
+                        "mode": "non_streaming_fallback",
+                    }
+
+                    await self._broadcast_answer(timings=self._latency_last)
                 return
-            
+
             # Parse final JSON result from streamed text
             try:
-                import json
                 data = json.loads(full_text)
                 result_dict = {
                     "one_liner": data.get("one_liner", ""),
@@ -333,10 +362,7 @@ class TranscriptWebSocket(CommandsMixin):
                     "citations": data.get("citations", []),
                     "confidence": float(data.get("confidence", 0.0)),
                 }
-                
-                # Validate citations if we have retrieval results
-                # (Note: we'd need to pass results through, but for now just use what we have)
-                
+
                 self._active_answer = result_dict
                 # Append to in-memory Q&A history for this session
                 self._qa_history.append(
@@ -350,10 +376,21 @@ class TranscriptWebSocket(CommandsMixin):
                 max_history = 100
                 if len(self._qa_history) > max_history:
                     self._qa_history = self._qa_history[-max_history:]
-                await self._broadcast_answer()
+
+                total_ms = round((time.monotonic() - t0) * 1000.0, 1)
+                self._latency_last = {
+                    "question": question,
+                    "ttft_ms": first_delta_ms,
+                    "total_ms": total_ms,
+                    "mode": "streaming",
+                }
+
+                await self._broadcast_answer(timings=self._latency_last)
             except json.JSONDecodeError:
                 logger.exception("Failed to parse synthesis JSON")
-                await self._broadcast_event({"type": "synthesis_error", "error": "Failed to parse response"})
+                await self._broadcast_event(
+                    {"type": "synthesis_error", "error": "Failed to parse response"}
+                )
         except Exception:
             logger.exception("Synthesis task failed")
             await self._broadcast_event({"type": "synthesis_error", "error": "Synthesis failed"})
@@ -370,15 +407,19 @@ class TranscriptWebSocket(CommandsMixin):
             pass
         return None
 
-    async def _broadcast_answer(self) -> None:
+    async def _broadcast_answer(self, timings: dict | None = None) -> None:
         """Broadcast an answer_update message to all clients."""
         if not self._clients or not self._active_answer:
             return
 
-        message = json.dumps({
+        payload = {
             "type": "answer_update",
             "active_answer": self._active_answer,
-        })
+        }
+        if timings:
+            payload["timings"] = timings
+
+        message = json.dumps(payload)
         disconnected = set()
         for ws in self._clients:
             try:
