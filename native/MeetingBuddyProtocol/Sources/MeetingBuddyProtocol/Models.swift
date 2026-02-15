@@ -85,6 +85,7 @@ public struct BackendMessage: Codable {
     public let active_answer: ActiveAnswer?
     public let qa_history: [QAEntry]?
     public let pinned: [PinnedAnswer]?
+    public let listening: Bool?
 
     // answer_partial / answer_update fields
     public let partial_text: String?
@@ -109,6 +110,7 @@ public struct BackendMessage: Codable {
         active_answer: ActiveAnswer?,
         qa_history: [QAEntry]?,
         pinned: [PinnedAnswer]?,
+        listening: Bool?,
         partial_text: String?,
         id: String?,
         success: Bool?,
@@ -126,6 +128,7 @@ public struct BackendMessage: Codable {
         self.active_answer = active_answer
         self.qa_history = qa_history
         self.pinned = pinned
+        self.listening = listening
         self.partial_text = partial_text
         self.id = id
         self.success = success

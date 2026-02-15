@@ -158,8 +158,9 @@ def main() -> None:
         ingest_config=ingest_config,
         token_manager=token_manager,
     )
-    # Store capture reference for diagnostics
+    # Store capture and streaming for diagnostics / pause control
     ws_server._capture = capture
+    ws_server._streaming = streaming
 
     # --- Start pipeline ---
     capture.start()

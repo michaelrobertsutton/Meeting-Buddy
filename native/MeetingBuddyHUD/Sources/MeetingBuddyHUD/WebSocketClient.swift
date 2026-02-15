@@ -22,6 +22,7 @@ final class WebSocketClient: ObservableObject {
 
     // UI state
     @Published var isPinned: Bool = false
+    @Published var isListening: Bool = true
 
     @Published var segments: [TranscriptSegment] = []
     @Published var lastTranscriptAt: Date? = nil
@@ -187,6 +188,8 @@ final class WebSocketClient: ObservableObject {
                     }
                 }
 
+                if let listening = msg.listening { self.isListening = listening }
+
                 self.activeQuestion = msg.active_question ?? self.activeQuestion
                 self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner
                 if let ans = msg.active_answer { self.activeAnswer = ans }
@@ -305,6 +308,19 @@ final class WebSocketClient: ObservableObject {
             let data = try await sendCommand("switch_project", params: ["name": name])
             await MainActor.run {
                 self.applySettings(data)
+            }
+        } catch {
+            await MainActor.run {
+                self.lastError = error.localizedDescription
+            }
+        }
+    }
+
+    func setListening(_ value: Bool) async {
+        do {
+            let data = try await sendCommand("set_listening", params: ["listening": value])
+            if let listening = data["listening"] as? Bool {
+                await MainActor.run { self.isListening = listening }
             }
         } catch {
             await MainActor.run {
