@@ -63,6 +63,7 @@ struct AccountView: View {
             } label: {
                 Label("Sign in with ChatGPT…", systemImage: "safari")
             }
+            .buttonStyle(.borderedProminent)
 
             Text("Opens browser for OAuth login. Requires a ChatGPT Plus subscription.")
                 .font(.caption)
