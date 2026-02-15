@@ -11,7 +11,7 @@ struct ContentView: View {
             Divider()
                 .background(Color.white.opacity(0.08))
 
-            // Main content area (background so it's never blank)
+            // Main content area — single continuous material (no inner rounded box; avoids double-corner/notch)
             VStack(spacing: AppTheme.spacing) {
                 // Transcript section
                 TranscriptView(segments: ws.segments, lastSegmentAt: ws.lastTranscriptAt)
@@ -34,7 +34,6 @@ struct ContentView: View {
             .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.activeAnswer?.one_liner ?? "")
             .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.synthesisError ?? "")
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .background(Color.black.opacity(0.12))
 
             Spacer(minLength: 0)
 
