@@ -169,6 +169,10 @@ async function connect() {
       await refreshDocs();
     } catch (e) {
       console.error(e);
+      if (dom.backendStatus) {
+        dom.backendStatus.textContent = 'Settings error: ' + e.message;
+        dom.backendStatus.className = 'settings-status error';
+      }
     }
   };
 
@@ -356,7 +360,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   dom.btnClose.addEventListener('click', async () => {
     const { getCurrentWindow } = window.__TAURI__.window;
-    await getCurrentWindow().hide();
+    await getCurrentWindow().close();
   });
 
   connect();
