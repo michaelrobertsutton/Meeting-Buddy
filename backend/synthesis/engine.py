@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import time
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
@@ -50,6 +51,7 @@ class SynthesisEngine:
         self._client = AsyncOpenAI(api_key=api_key)
         self._last_question: str | None = None
         self._last_result: SynthesisResult | None = None
+        self._last_retrieval_ms: float | None = None
         # OAuth fields (set via reinit_client_oauth)
         self._oauth_token: str | None = None
         self._chatgpt_account_id: str | None = None
@@ -78,6 +80,12 @@ class SynthesisEngine:
         self._retriever = retriever
         self._last_question = None
         self._last_result = None
+        self._last_retrieval_ms = None
+
+    @property
+    def last_retrieval_ms(self) -> float | None:
+        """Retrieval latency in milliseconds from the most recent synthesis call."""
+        return self._last_retrieval_ms
 
     async def synthesize(self, question: str, transcript_context: str | None = None) -> SynthesisResult | None:
         """Synthesize an answer for the given question. Returns None if unchanged."""
@@ -142,10 +150,14 @@ class SynthesisEngine:
         results = []
         if self._retriever:
             loop = asyncio.get_event_loop()
+            t_ret = time.monotonic()
             results = await loop.run_in_executor(
                 None, self._retriever.retrieve, question
             )
-            logger.info("Retrieved %d chunks for synthesis", len(results))
+            self._last_retrieval_ms = round((time.monotonic() - t_ret) * 1000.0, 1)
+            logger.info("Retrieved %d chunks for synthesis (%.1f ms)", len(results), self._last_retrieval_ms)
+        else:
+            self._last_retrieval_ms = None
 
         doc_registry = None
         if self._retriever and hasattr(self._retriever, "get_doc_registry"):
@@ -302,10 +314,14 @@ class SynthesisEngine:
         results = []
         if self._retriever:
             loop = asyncio.get_event_loop()
+            t_ret = time.monotonic()
             results = await loop.run_in_executor(
                 None, self._retriever.retrieve, question
             )
-            logger.info("Retrieved %d chunks for synthesis", len(results))
+            self._last_retrieval_ms = round((time.monotonic() - t_ret) * 1000.0, 1)
+            logger.info("Retrieved %d chunks for synthesis (%.1f ms)", len(results), self._last_retrieval_ms)
+        else:
+            self._last_retrieval_ms = None
 
         doc_registry = None
         if self._retriever and hasattr(self._retriever, "get_doc_registry"):
