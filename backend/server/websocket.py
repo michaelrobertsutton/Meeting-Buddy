@@ -345,6 +345,7 @@ class TranscriptWebSocket(CommandsMixin):
                         "question": question,
                         "ttft_ms": first_delta_ms,
                         "total_ms": total_ms,
+                        "retrieval_ms": getattr(self._synthesis_engine, "last_retrieval_ms", None),
                         "mode": "non_streaming_fallback",
                     }
 
@@ -382,6 +383,7 @@ class TranscriptWebSocket(CommandsMixin):
                     "question": question,
                     "ttft_ms": first_delta_ms,
                     "total_ms": total_ms,
+                    "retrieval_ms": getattr(self._synthesis_engine, "last_retrieval_ms", None),
                     "mode": "streaming",
                 }
 
