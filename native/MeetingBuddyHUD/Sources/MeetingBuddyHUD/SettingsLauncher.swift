@@ -3,13 +3,19 @@ import AppKit
 
 enum SettingsLauncher {
 
-    private static func bundledSettingsExecutable() -> URL? {
-        guard let hudExe = Bundle.main.executableURL else { return nil }
+    private static func bundledSettingsExecutables() -> [URL] {
+        guard let hudExe = Bundle.main.executableURL else { return [] }
         let dir = hudExe.deletingLastPathComponent()
-        return dir.appendingPathComponent("MeetingBuddySettings")
+        // Try both plain name (bundled .app) and arch-suffixed name (dev sidecar)
+        return [
+            dir.appendingPathComponent("MeetingBuddySettings"),
+            dir.appendingPathComponent("MeetingBuddySettings-aarch64-apple-darwin"),
+        ]
     }
 
     static func launch() throws {
+        let logMsg = "[SettingsLauncher] launch() called, cwd=\(FileManager.default.currentDirectoryPath)\n"
+        try? logMsg.write(toFile: "/tmp/settings_launcher.log", atomically: false, encoding: .utf8)
         // Single-instance behavior: if Settings is already running, bring it to front.
         // Settings is a raw executable (not necessarily a .app bundle), so we match by executable name.
         let runningSettings = NSWorkspace.shared.runningApplications.filter { app in
@@ -29,15 +35,16 @@ enum SettingsLauncher {
         }
 
         if let existing = runningSettings.first {
-            existing.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
-            return
+            // Terminate any existing instance and relaunch so we always get a fresh window.
+            // (SwiftUI WindowGroup keeps the process alive after the window is closed,
+            //  so activate() alone won't reopen it.)
+            existing.terminate()
+            Thread.sleep(forTimeInterval: 0.25)
         }
 
         var candidates: [URL] = []
 
-        if let bundled = bundledSettingsExecutable() {
-            candidates.append(bundled)
-        }
+        candidates.append(contentsOf: bundledSettingsExecutables())
 
         // SwiftPM build output (local dev)
         candidates.append(
@@ -60,7 +67,9 @@ enum SettingsLauncher {
                 .appendingPathComponent("MeetingBuddySettings-aarch64-apple-darwin")
         )
 
+        NSLog("[SettingsLauncher] candidates: %@", candidates.map(\.path).joined(separator: ", "))
         if let exe = candidates.first(where: { FileManager.default.isExecutableFile(atPath: $0.path) }) {
+            NSLog("[SettingsLauncher] found: %@", exe.path)
             // Launch the Settings binary as a subprocess. Do NOT use openApplication(at:configuration:)
             // — that API is for .app bundles; for a raw executable macOS opens a terminal.
             let process = Process()
