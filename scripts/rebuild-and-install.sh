@@ -16,9 +16,14 @@ echo "==> Writing project_root pointer for sidecar…"
 mkdir -p "$HOME/.meeting-buddy"
 echo "$REPO_ROOT" > "$HOME/.meeting-buddy/project_root"
 
-echo "==> Installing deps and building .app (this takes ~2 min)…"
+echo "==> Rebuilding AudioCapture (Swift)…"
+cd "$REPO_ROOT/audio-capture"
+swift build -c release 2>&1
+cp .build/release/AudioCapture "$REPO_ROOT/ui/src-tauri/AudioCapture-aarch64-apple-darwin"
+
+echo "==> Building .app bundle (this takes ~2 min)…"
 cd "$REPO_ROOT/ui"
-npm ci && npm run tauri build 2>&1
+npm run tauri build 2>&1
 
 echo "==> Killing running instance (if any)…"
 osascript -e 'quit app "Meeting Buddy"' 2>/dev/null || true
