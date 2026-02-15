@@ -56,6 +56,32 @@ fn spawn_sidecar(
     }
 }
 
+/// Spawn a sidecar if it's not already running.
+///
+/// Used for Settings to avoid repeatedly launching additional instances.
+fn ensure_sidecar_running(
+    app: &tauri::AppHandle,
+    name: &str,
+    state: &Mutex<Option<CommandChild>>,
+) -> Result<(), String> {
+    if state.lock().unwrap().is_some() {
+        // Best-effort: if it's already running, do nothing.
+        // (No reliable "focus" API for raw sidecar executables.)
+        return Ok(());
+    }
+
+    match app.shell().sidecar(name) {
+        Ok(cmd) => match cmd.spawn() {
+            Ok((_rx, child)) => {
+                *state.lock().unwrap() = Some(child);
+                Ok(())
+            }
+            Err(e) => Err(format!("Failed to spawn {name}: {e}")),
+        },
+        Err(e) => Err(format!("Sidecar {name} not found: {e}")),
+    }
+}
+
 #[tauri::command]
 fn get_backend_url() -> String {
     "ws://localhost:8765".to_string()
@@ -534,7 +560,7 @@ pub fn run() {
                                 if let Some(state) = app_handle.try_state::<SettingsChild>() {
                                     if let Err(e) = {
                                         #[allow(clippy::needless_borrow)]
-                                        spawn_sidecar(&app_handle, "MeetingBuddySettings", &state.0)
+                                        ensure_sidecar_running(&app_handle, "MeetingBuddySettings", &state.0)
                                     } {
                                         log::error!("[settings] {e}");
                                     }
