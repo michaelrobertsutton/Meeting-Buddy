@@ -6,8 +6,6 @@ import logging
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
-import aiohttp
-
 from backend.synthesis.prompt import SYSTEM_PROMPT, build_user_prompt
 
 logger = logging.getLogger(__name__)
@@ -258,6 +256,8 @@ class SynthesisEngine:
             "store": False,
         }
 
+        import aiohttp  # noqa: PLC0415 — lazy; keeps module importable without aiohttp
+
         full_text = ""
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -364,6 +364,8 @@ class SynthesisEngine:
             "stream": True,
             "store": False,
         }
+
+        import aiohttp  # noqa: PLC0415 — lazy; keeps module importable without aiohttp
 
         async with aiohttp.ClientSession() as session:
             async with session.post(
