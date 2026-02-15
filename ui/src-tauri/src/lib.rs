@@ -208,8 +208,9 @@ pub fn run() {
                                                 if let Some(diag) = app_handle_clone.try_state::<BackendDiagState>() {
                                                     let mut d = diag.0.lock().unwrap();
                                                     d.stderr_tail.push(text.clone());
-                                                    if d.stderr_tail.len() > 50 {
-                                                        let _ = d.stderr_tail.drain(0..(d.stderr_tail.len() - 50));
+                                                    let len = d.stderr_tail.len();
+                                                    if len > 50 {
+                                                        let _ = d.stderr_tail.drain(0..(len - 50));
                                                     }
                                                 }
 
@@ -290,8 +291,9 @@ pub fn run() {
                                                                                 if let Some(diag) = _app_handle_drain.try_state::<BackendDiagState>() {
                                                                                     let mut d = diag.0.lock().unwrap();
                                                                                     d.stderr_tail.push(text.clone());
-                                                                                    if d.stderr_tail.len() > 50 {
-                                                                                        let _ = d.stderr_tail.drain(0..(d.stderr_tail.len() - 50));
+                                                                                    let len = d.stderr_tail.len();
+                                                                                    if len > 50 {
+                                                                                        let _ = d.stderr_tail.drain(0..(len - 50));
                                                                                     }
                                                                                 }
                                                                                 if text.contains("ERROR") || text.contains("error:") {
