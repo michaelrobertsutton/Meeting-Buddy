@@ -581,7 +581,7 @@ class CommandsMixin:
             project_path = self._project_manager.get_project_path(project_name)
             retriever = Retriever(project_path, self._ingest_config)
             if self._synthesis_engine:
-                self._synthesis_engine.set_retriever(retriever)
+                self._synthesis_engine.set_retriever(retriever, project_slug=project_name)
             logger.info("Retriever reloaded for project '%s'", project_name)
         except Exception:
             logger.exception("Failed to reload retriever for '%s'", project_name)

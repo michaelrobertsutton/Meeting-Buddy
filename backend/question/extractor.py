@@ -48,6 +48,7 @@ class ActiveQuestionExtractor:
         self._last_version: int = -1
         self._question_history: list[dict] = []  # [{text, score, time}]
         self._seen_questions: set[str] = set()  # dedup by normalized text
+        self._candidate_question: str | None = None  # best question before debounce
         self._manual_question: str | None = None  # user-selected override
         self._manual_set_time: float | None = None
 
@@ -125,6 +126,11 @@ class ActiveQuestionExtractor:
         else:
             logger.info("Resumed auto question detection")
 
+    @property
+    def candidate_question(self):
+        """Best-scoring question before debounce fires."""
+        return self._candidate_question
+
     def update(self) -> str | None:
         """Check for a new active question. Returns current question (may be unchanged)."""
         self._maybe_expire_manual()
@@ -182,6 +188,8 @@ class ActiveQuestionExtractor:
             logger.debug("[QuestionExtractor] Best score %.2f below min_confidence %.2f, keeping current question", 
                         best_score, self._config.min_confidence)
             return self.current_question
+
+        self._candidate_question = best_text
 
         # Debounce: don't change question too frequently
         if best_text != self._current_question:

@@ -19,7 +19,7 @@ class EmbeddingConfig:
 
 @dataclass
 class RetrievalConfig:
-    top_k: int = 8
+    top_k: int = 3
     min_score: float = 0.25
 
 
