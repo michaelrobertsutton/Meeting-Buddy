@@ -9,7 +9,6 @@ struct HUDToolbarView: View {
     @FocusState private var isQuestionFocused: Bool
 
     @State private var hoveringListen: Bool = false
-    @State private var hoveringExport: Bool = false
     @State private var hoveringSettings: Bool = false
     @State private var hoveringPin: Bool = false
 
@@ -90,14 +89,6 @@ struct HUDToolbarView: View {
                     }
 
                     toolbarButton(
-                        systemName: "square.and.arrow.up",
-                        help: "Export session to file (~/.meeting-buddy/exports)",
-                        hovering: $hoveringExport
-                    ) {
-                        Task { await ws.exportSession(format: "markdown") }
-                    }
-
-                    toolbarButton(
                         systemName: "gearshape",
                         help: "Settings",
                         hovering: $hoveringSettings
@@ -119,18 +110,6 @@ struct HUDToolbarView: View {
                     ) {
                         NotificationCenter.default.post(name: .meetingBuddyHUDToggleWindowPin, object: nil)
                     }
-
-                    Button {
-                        NotificationCenter.default.post(name: .meetingBuddyHUDHide, object: nil)
-                    } label: {
-                        Image(systemName: "chevron.down.circle")
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .foregroundStyle(AppTheme.textSecondary)
-                    .opacity(0.85)
-                    .help("Hide (Cmd+H). Alt+Space to show again.")
                 }
                 .zIndex(1)
             }
