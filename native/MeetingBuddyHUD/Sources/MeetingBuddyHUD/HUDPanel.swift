@@ -17,8 +17,8 @@ final class HUDPanel: NSPanel {
 
         title = "Meeting Buddy"
 
-        // Floating panel behavior
-        level = .floating
+        // Window level set by setFloating(_:) (default: unpinned / .normal)
+        level = .normal
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
@@ -55,10 +55,15 @@ final class HUDPanelController {
     private var hostingView: NSHostingView<AnyView>?
     private var closeDelegate: HUDPanelCloseDelegate?
 
-    /// Show the HUD with the given SwiftUI content
-    func show<Content: View>(@ViewBuilder content: () -> Content) {
+    /// UserDefaults key for persisting window pin (always-on-top) state.
+    static let windowFloatingKey = "MeetingBuddyHUD.windowFloating"
+
+    /// Show the HUD with the given SwiftUI content.
+    /// - Parameter initialFloating: Whether the window should be floating (always-on-top). Applied when the panel is first created; use persisted value so next launch matches last toggle.
+    func show<Content: View>(initialFloating: Bool, @ViewBuilder content: () -> Content) {
         if panel == nil {
             panel = HUDPanel()
+            panel?.setFloating(initialFloating)
             closeDelegate = HUDPanelCloseDelegate { [weak self] in
                 self?.hide()
             }
@@ -104,12 +109,12 @@ final class HUDPanelController {
         panel?.orderOut(nil)
     }
 
-    /// Toggle visibility
-    func toggle<Content: View>(@ViewBuilder content: () -> Content) {
+    /// Toggle visibility. When showing, uses `initialFloating` for window level (e.g. from UserDefaults).
+    func toggle<Content: View>(initialFloating: Bool, @ViewBuilder content: () -> Content) {
         if let panel = panel, panel.isVisible {
             hide()
         } else {
-            show(content: content)
+            show(initialFloating: initialFloating, content: content)
         }
     }
 
