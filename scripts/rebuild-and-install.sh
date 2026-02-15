@@ -27,11 +27,17 @@ npm run tauri build 2>&1
 
 echo "==> Killing running instance (if any)…"
 osascript -e 'quit app "Meeting Buddy"' 2>/dev/null || true
-sleep 1
+killall "Meeting Buddy" 2>/dev/null || true
+sleep 2
 
 echo "==> Installing to /Applications…"
 rm -rf "/Applications/$APP_NAME.app"
 cp -r "$BUNDLE" "/Applications/$APP_NAME.app"
+
+# Tell Launch Services about the new install so it doesn't confuse
+# the build-output copy with the /Applications copy.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+  -f "/Applications/$APP_NAME.app" 2>/dev/null || true
 
 echo "==> Launching…"
 open "/Applications/$APP_NAME.app"
