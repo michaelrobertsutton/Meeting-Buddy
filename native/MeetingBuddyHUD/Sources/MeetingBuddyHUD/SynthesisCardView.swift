@@ -79,14 +79,8 @@ struct SynthesisCardView: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
-                .stroke(confidenceColor.opacity(0.6), lineWidth: 1)
+                .strokeBorder(AppTheme.glassEdge, lineWidth: 0.5)
         )
-    }
-
-    private var confidenceColor: Color {
-        let c = answer?.confidence ?? 0
-        if c > 0.6 { return Color(hex: "#4CAF50") }
-        if c >= 0.3 { return Color(hex: "#FFC107") }
-        return Color(hex: "#F44336")
+        .shadow(color: .black.opacity(0.15), radius: 20, x: 0, y: 4)
     }
 }
