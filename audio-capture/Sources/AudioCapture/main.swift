@@ -1,24 +1,21 @@
-// AudioCapture - macOS system audio capture via Core Audio Taps
+// AudioCapture - macOS system audio capture via ScreenCaptureKit SCStream
 //
-// Captures all system audio (no video, no screen sharing indicator) and writes
-// raw PCM samples to stdout:
+// Captures all system audio and writes raw PCM samples to stdout:
 //   16-bit signed integer, 16 kHz, mono, little-endian
 //
 // Usage:
 //   .build/release/AudioCapture | python my_asr_pipeline.py
 //   .build/release/AudioCapture > recording.raw
 //
-// Requires: macOS 14.2+ (Sonoma), System Audio Recording permission
-//           (System Settings > Privacy & Security > Screen & System Audio Recording
-//            → scroll to "System Audio Recording Only" section)
+// Requires: macOS 13+ (Ventura), Screen & System Audio Recording permission
+//           (System Settings > Privacy & Security > Screen & System Audio Recording)
 //
 // Build:
 //   cd audio-capture && swift build -c release
 
 import AVFoundation
-import AudioToolbox
-import CoreAudio
 import Foundation
+import ScreenCaptureKit
 
 // ---------------------------------------------------------------------------
 // MARK: - Constants
@@ -48,71 +45,79 @@ extension FileHandle: @retroactive TextOutputStream {
 }
 
 // ---------------------------------------------------------------------------
-// MARK: - Helper: AudioObjectPropertyAddress
+// MARK: - SCStreamRecorder
 // ---------------------------------------------------------------------------
 
-func propertyAddress(selector: AudioObjectPropertySelector) -> AudioObjectPropertyAddress {
-    AudioObjectPropertyAddress(
-        mSelector: selector,
-        mScope: kAudioObjectPropertyScopeGlobal,
-        mElement: kAudioObjectPropertyElementMain
-    )
-}
+/// Captures system audio via SCStream (ScreenCaptureKit), converts to
+/// 16 kHz Int16 mono, and writes raw bytes to stdout.
+final class SCStreamRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
-// ---------------------------------------------------------------------------
-// MARK: - AudioTapRecorder
-// ---------------------------------------------------------------------------
+    private var stream: SCStream?
 
-/// Creates a Core Audio Tap on all system audio, reads samples via an IO proc
-/// callback, converts to 16 kHz Int16 mono, and writes raw bytes to stdout.
-final class AudioTapRecorder {
-
-    private var tapID: AudioObjectID = AudioObjectID(kAudioObjectUnknown)
-    private var aggregateDeviceID: AudioObjectID = 0
-    private var ioProcID: AudioDeviceIOProcID?
-
-    // Audio format conversion
+    // Lazy converter — initialized from first callback's actual ASBD
     private var converter: AVAudioConverter?
     private var outputFormat: AVAudioFormat?
-    private var sourceFormat: AVAudioFormat?
-    private var tapASBD = AudioStreamBasicDescription()
+    private var converterInitLock = NSLock()
 
-    // Diagnostics: track callback activity (atomic for thread safety)
+    // Diagnostics
     private var callbackCount: Int64 = 0
     private var emptyCallbackCount: Int64 = 0
     private var bytesWritten: Int64 = 0
     private var diagTimer: DispatchSourceTimer?
 
     // ---------------------------------------------------------------------------
-    // Setup
+    // Start
     // ---------------------------------------------------------------------------
 
-    func start() throws {
-        // 1. Create a system-wide audio tap
-        try createTap()
+    func start() async throws {
+        log("[AudioCapture] requesting shareable content...")
+        let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
 
-        // 2. Create an aggregate device to host the tap
-        try createAggregateDevice()
+        guard let display = content.displays.first else {
+            log("[AudioCapture] ERROR: no display found")
+            throw NSError(domain: "AudioCapture", code: -1,
+                          userInfo: [NSLocalizedDescriptionKey: "No display available"])
+        }
 
-        // 3. Attach the tap to the aggregate device
-        try attachTapToDevice()
+        let filter = SCContentFilter(display: display,
+                                     excludingApplications: [],
+                                     exceptingWindows: [])
 
-        // 4. Read the device's source format and set up conversion
-        try setupConverter()
+        let config = SCStreamConfiguration()
+        config.capturesAudio = true
+        config.excludesCurrentProcessAudio = false
+        config.sampleRate = 48000
+        config.channelCount = 2
 
-        // 5. Start the IO proc (audio callback)
-        try startIOProc()
+        // Minimal video required — SCKit's internal pipeline won't init without it
+        config.width = 2
+        config.height = 2
+        config.minimumFrameInterval = CMTime(value: 1, timescale: 1)  // 1 fps
+        config.showsCursor = false
 
-        log("[AudioCapture] capturing system audio -> stdout "
-            + "(16-bit signed LE, 16 kHz, mono)")
+        let stream = SCStream(filter: filter, configuration: config, delegate: self)
+
+        // Video output required even as no-op (SCKit internal requirement)
+        try stream.addStreamOutput(self,
+                                   type: .screen,
+                                   sampleHandlerQueue: DispatchQueue(label: "sc.video.drop"))
+        try stream.addStreamOutput(self,
+                                   type: .audio,
+                                   sampleHandlerQueue: DispatchQueue(label: "sc.audio",
+                                                                     qos: .userInteractive))
+
+        try await stream.startCapture()
+        self.stream = stream
+
+        log("[AudioCapture] capturing system audio -> stdout (16-bit signed LE, 16 kHz, mono)")
         log("[AudioCapture] press Ctrl+C to stop")
 
-        // Periodic diagnostic: log callback activity every 5 seconds
+        // Periodic diagnostic every 5 seconds
         let diagTimer = DispatchSource.makeTimerSource(queue: .main)
         diagTimer.schedule(deadline: .now() + 5, repeating: 5.0)
         diagTimer.setEventHandler { [weak self] in
             guard let self = self else { return }
-            let cb = OSAtomicAdd64(0, &self.callbackCount)
+            let cb    = OSAtomicAdd64(0, &self.callbackCount)
             let empty = OSAtomicAdd64(0, &self.emptyCallbackCount)
             let bytes = OSAtomicAdd64(0, &self.bytesWritten)
             log("[AudioCapture] diag: callbacks=\(cb), empty=\(empty), bytesWritten=\(bytes)")
@@ -122,336 +127,143 @@ final class AudioTapRecorder {
     }
 
     func stop() {
+        diagTimer?.cancel()
+        diagTimer = nil
         log("[AudioCapture] shutting down...")
-
-        if let ioProcID = ioProcID {
-            AudioDeviceStop(aggregateDeviceID, ioProcID)
-            AudioDeviceDestroyIOProcID(aggregateDeviceID, ioProcID)
-            self.ioProcID = nil
-        }
-        if tapID != AudioObjectID(kAudioObjectUnknown) {
-            AudioHardwareDestroyProcessTap(tapID)
-            tapID = AudioObjectID(kAudioObjectUnknown)
-        }
-        if aggregateDeviceID != 0 {
-            AudioHardwareDestroyAggregateDevice(aggregateDeviceID)
-            aggregateDeviceID = 0
-        }
-
-        log("[AudioCapture] capture stopped cleanly")
+        Task { try? await stream?.stopCapture() }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { exit(0) }
     }
 
     // ---------------------------------------------------------------------------
-    // 1. Create the tap
+    // SCStreamOutput delegate
     // ---------------------------------------------------------------------------
 
-    private func createTap() throws {
-        log("[AudioCapture] creating system audio tap...")
+    func stream(_ stream: SCStream,
+                didOutputSampleBuffer sampleBuffer: CMSampleBuffer,
+                of outputType: SCStreamOutputType) {
 
-        let description = CATapDescription()
-        description.name = "meeting-buddy-tap"
-        // No processes → captures ALL system audio
-        description.isPrivate = true
-        description.isMixdown = true
-        description.isMono = false     // get stereo from system, we'll mix to mono ourselves
-        description.isExclusive = false
-        description.muteBehavior = .unmuted
+        // Silently discard video frames
+        guard outputType == .audio else { return }
 
-        var newTapID = AudioObjectID(kAudioObjectUnknown)
-        let status = AudioHardwareCreateProcessTap(description, &newTapID)
-
-        guard status == kAudioHardwareNoError else {
-            log("[AudioCapture] ERROR: AudioHardwareCreateProcessTap failed: \(status)")
-            throw NSError(domain: "AudioCapture", code: Int(status))
-        }
-
-        tapID = newTapID
-        log("[AudioCapture] tap created (ID: \(tapID))")
-
-        // Read and store the tap's native format for use in setupConverter()
-        var fmtAddr = AudioObjectPropertyAddress(
-            mSelector: kAudioTapPropertyFormat,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var fmtSize = UInt32(MemoryLayout<AudioStreamBasicDescription>.stride)
-        AudioObjectGetPropertyData(tapID, &fmtAddr, 0, nil, &fmtSize, &tapASBD)
-        log("[AudioCapture] tap format: \(tapASBD.mSampleRate) Hz, \(tapASBD.mChannelsPerFrame) ch")
-    }
-
-    // ---------------------------------------------------------------------------
-    // 2. Create aggregate device
-    // ---------------------------------------------------------------------------
-
-    /// Returns the UID string of the current default system output device.
-    private func defaultOutputDeviceUID() -> String? {
-        var deviceID = AudioObjectID(kAudioObjectUnknown)
-        var addr = AudioObjectPropertyAddress(
-            mSelector: kAudioHardwarePropertyDefaultOutputDevice,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var size = UInt32(MemoryLayout<AudioObjectID>.size)
-        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &addr, 0, nil, &size, &deviceID) == noErr,
-              deviceID != AudioObjectID(kAudioObjectUnknown) else { return nil }
-
-        var uidAddr = AudioObjectPropertyAddress(
-            mSelector: kAudioDevicePropertyDeviceUID,
-            mScope: kAudioObjectPropertyScopeGlobal,
-            mElement: kAudioObjectPropertyElementMain
-        )
-        var cfUID: CFString = "" as CFString
-        var uidSize = UInt32(MemoryLayout<CFString>.stride)
-        withUnsafeMutablePointer(to: &cfUID) { ptr in
-            _ = AudioObjectGetPropertyData(deviceID, &uidAddr, 0, nil, &uidSize, ptr)
-        }
-        let uid = cfUID as String
-        return uid.isEmpty ? nil : uid
-    }
-
-    private func createAggregateDevice() throws {
-        let uid = UUID().uuidString
-
-        // An aggregate device needs at least one physical sub-device to start.
-        // We add the default output device so CoreAudio can route tap audio through it.
-        var subDeviceList: [[String: Any]] = []
-        if let outputUID = defaultOutputDeviceUID() {
-            subDeviceList = [[kAudioSubDeviceUIDKey: outputUID]]
-            log("[AudioCapture] aggregate sub-device: \(outputUID)")
-        } else {
-            log("[AudioCapture] WARNING: no default output device found; aggregate may fail to start")
-        }
-
-        let description: [String: Any] = [
-            kAudioAggregateDeviceNameKey: "meeting-buddy-aggregate",
-            kAudioAggregateDeviceUIDKey: uid,
-            kAudioAggregateDeviceSubDeviceListKey: subDeviceList as CFArray,
-            kAudioAggregateDeviceIsPrivateKey: true,
-            kAudioAggregateDeviceIsStackedKey: false,
-        ]
-
-        var deviceID: AudioObjectID = 0
-        let status = AudioHardwareCreateAggregateDevice(description as CFDictionary, &deviceID)
-
-        guard status == kAudioHardwareNoError else {
-            log("[AudioCapture] ERROR: AudioHardwareCreateAggregateDevice failed: \(status)")
-            throw NSError(domain: "AudioCapture", code: Int(status))
-        }
-
-        aggregateDeviceID = deviceID
-        log("[AudioCapture] aggregate device created (ID: \(aggregateDeviceID))")
-    }
-
-    // ---------------------------------------------------------------------------
-    // 3. Attach tap to device
-    // ---------------------------------------------------------------------------
-
-    private func attachTapToDevice() throws {
-        // Get the tap's UID
-        var addr = propertyAddress(selector: kAudioTapPropertyUID)
-        var size = UInt32(MemoryLayout<CFString>.stride)
-        var tapUID: CFString = "" as CFString
-
-        withUnsafeMutablePointer(to: &tapUID) { ptr in
-            _ = AudioObjectGetPropertyData(tapID, &addr, 0, nil, &size, ptr)
-        }
-
-        // Add the tap to the aggregate device's tap list
-        addr = propertyAddress(selector: kAudioAggregateDevicePropertyTapList)
-        let tapArray = [tapUID] as CFArray
-        size = UInt32(MemoryLayout<CFArray>.stride)
-
-        let status = withUnsafePointer(to: tapArray) { ptr in
-            AudioObjectSetPropertyData(aggregateDeviceID, &addr, 0, nil, size, ptr)
-        }
-
-        guard status == kAudioHardwareNoError else {
-            log("[AudioCapture] ERROR: failed to attach tap to device: \(status)")
-            throw NSError(domain: "AudioCapture", code: Int(status))
-        }
-
-        log("[AudioCapture] tap attached to aggregate device")
-    }
-
-    // ---------------------------------------------------------------------------
-    // 4. Set up format converter
-    // ---------------------------------------------------------------------------
-
-    private func setupConverter() throws {
-        // Use the tap's native format (read during createTap).
-        // Querying kAudioDevicePropertyStreamFormat on the aggregate device fails
-        // when it has no sub-devices — using the tap ASBD directly avoids this.
-        let asbd = tapASBD
-        guard asbd.mSampleRate > 0 && asbd.mChannelsPerFrame > 0 else {
-            log("[AudioCapture] ERROR: tap ASBD is empty, cannot set up converter")
-            throw NSError(domain: "AudioCapture", code: -4)
-        }
-
-        log("[AudioCapture] source format: "
-            + "\(asbd.mSampleRate) Hz, "
-            + "\(asbd.mChannelsPerFrame) ch, "
-            + "\(asbd.mBitsPerChannel) bit")
-
-        // Source format: Float32, non-interleaved (typical for Core Audio)
-        guard let srcFormat = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: asbd.mSampleRate,
-            channels: asbd.mChannelsPerFrame,
-            interleaved: false
-        ) else {
-            log("[AudioCapture] ERROR: failed to create source AVAudioFormat")
-            throw NSError(domain: "AudioCapture", code: -1)
-        }
-
-        // Target format: Int16, 16 kHz, mono, interleaved
-        guard let tgtFormat = AVAudioFormat(
-            commonFormat: .pcmFormatInt16,
-            sampleRate: kTargetSampleRate,
-            channels: kTargetChannels,
-            interleaved: true
-        ) else {
-            log("[AudioCapture] ERROR: failed to create target AVAudioFormat")
-            throw NSError(domain: "AudioCapture", code: -2)
-        }
-
-        guard let conv = AVAudioConverter(from: srcFormat, to: tgtFormat) else {
-            log("[AudioCapture] ERROR: failed to create AVAudioConverter")
-            throw NSError(domain: "AudioCapture", code: -3)
-        }
-
-        self.converter = conv
-        self.sourceFormat = srcFormat
-        self.outputFormat = tgtFormat
-
-        log("[AudioCapture] converter ready: "
-            + "\(srcFormat.sampleRate) Hz \(srcFormat.channelCount)ch Float32 "
-            + "-> \(tgtFormat.sampleRate) Hz \(tgtFormat.channelCount)ch Int16")
-    }
-
-    // ---------------------------------------------------------------------------
-    // 5. Start IO proc
-    // ---------------------------------------------------------------------------
-
-    private func startIOProc() throws {
-        var procID: AudioDeviceIOProcID?
-
-        let status = AudioDeviceCreateIOProcID(
-            aggregateDeviceID,
-            { (_, _, inInputData, _, _, _, inClientData) -> OSStatus in
-                guard let clientData = inClientData else { return noErr }
-                let recorder = Unmanaged<AudioTapRecorder>.fromOpaque(clientData)
-                    .takeUnretainedValue()
-                recorder.handleAudioCallback(inInputData)
-                return noErr
-            },
-            Unmanaged.passUnretained(self).toOpaque(),
-            &procID
-        )
-
-        guard status == noErr, let procID = procID else {
-            log("[AudioCapture] ERROR: AudioDeviceCreateIOProcID failed: \(status)")
-            throw NSError(domain: "AudioCapture", code: Int(status))
-        }
-
-        self.ioProcID = procID
-
-        let startStatus = AudioDeviceStart(aggregateDeviceID, procID)
-        guard startStatus == noErr else {
-            log("[AudioCapture] ERROR: AudioDeviceStart failed: \(startStatus)")
-            throw NSError(domain: "AudioCapture", code: Int(startStatus))
-        }
-
-        log("[AudioCapture] IO proc started")
-    }
-
-    // ---------------------------------------------------------------------------
-    // Audio callback (real-time thread)
-    // ---------------------------------------------------------------------------
-
-    private func handleAudioCallback(_ inputData: UnsafePointer<AudioBufferList>?) {
         OSAtomicIncrement64(&callbackCount)
 
-        guard let inputData = inputData,
-              let converter = self.converter,
-              let srcFormat = self.sourceFormat,
-              let outFmt = self.outputFormat else {
+        guard CMSampleBufferDataIsReady(sampleBuffer) else {
             OSAtomicIncrement64(&emptyCallbackCount)
             return
         }
 
-        let bufferList = inputData.pointee
-        let firstBuffer = bufferList.mBuffers
+        // Get source format from this buffer
+        guard let fmtDesc = CMSampleBufferGetFormatDescription(sampleBuffer),
+              let asbdPtr = CMAudioFormatDescriptionGetStreamBasicDescription(fmtDesc) else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
+        let asbd = asbdPtr.pointee
 
-        guard let data = firstBuffer.mData, firstBuffer.mDataByteSize > 0 else {
+        // Lazy-init converter from the first real callback's ASBD
+        converterInitLock.lock()
+        if converter == nil {
+            initConverter(asbd: asbd)
+        }
+        converterInitLock.unlock()
+
+        guard let converter = self.converter, let outFmt = self.outputFormat else {
             OSAtomicIncrement64(&emptyCallbackCount)
             return
         }
 
-        // Calculate frame count from the input buffer
-        let bytesPerFrame = srcFormat.streamDescription.pointee.mBytesPerFrame
-        guard bytesPerFrame > 0 else { return }
-        let frameCount = AVAudioFrameCount(firstBuffer.mDataByteSize / bytesPerFrame)
-        guard frameCount > 0 else { return }
+        // Extract audio buffer list — two-call pattern required.
+        // AudioBufferList as a Swift stack var only has room for 1 AudioBuffer entry,
+        // but non-interleaved multichannel audio requires N entries.
+        // We must allocate exactly bufferListSize bytes dynamically.
+        var bufferListSize: Int = 0
+        var blockBuffer: CMBlockBuffer?
 
-        // Create source PCM buffer wrapping the input data
+        // First call: get required size
+        CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: &bufferListSize,
+            bufferListOut: nil,
+            bufferListSize: 0,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: nil
+        )
+
+        guard bufferListSize > 0 else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
+
+        // Allocate exactly the required bytes so all AudioBuffer entries fit
+        let ablMem = UnsafeMutableRawPointer.allocate(
+            byteCount: bufferListSize,
+            alignment: MemoryLayout<AudioBufferList>.alignment
+        )
+        defer { ablMem.deallocate() }
+        let ablPtr = ablMem.bindMemory(to: AudioBufferList.self, capacity: 1)
+
+        // Second call: get the actual data
+        let status = CMSampleBufferGetAudioBufferListWithRetainedBlockBuffer(
+            sampleBuffer,
+            bufferListSizeNeededOut: nil,
+            bufferListOut: ablPtr,
+            bufferListSize: bufferListSize,
+            blockBufferAllocator: nil,
+            blockBufferMemoryAllocator: nil,
+            flags: kCMSampleBufferFlag_AudioBufferList_Assure16ByteAlignment,
+            blockBufferOut: &blockBuffer
+        )
+
+        guard status == noErr else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
+
+        // blockBuffer is +1 retained — ARC releases when it goes out of scope
+
+        // Build source AVAudioFormat from ASBD
+        let isInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
+        guard let srcFmt = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: asbd.mSampleRate,
+            channels: AVAudioChannelCount(asbd.mChannelsPerFrame),
+            interleaved: isInterleaved
+        ) else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
+
+        let frameCount = AVAudioFrameCount(CMSampleBufferGetNumSamples(sampleBuffer))
+        guard frameCount > 0 else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
+
+        // Wrap audio buffer list in AVAudioPCMBuffer (no copy)
         guard let srcBuffer = AVAudioPCMBuffer(
-            pcmFormat: srcFormat,
-            frameCapacity: frameCount
-        ) else { return }
+            pcmFormat: srcFmt,
+            bufferListNoCopy: ablPtr,
+            deallocator: nil
+        ) else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
+        }
         srcBuffer.frameLength = frameCount
 
-        // Copy channel data
-        let channelCount = Int(srcFormat.channelCount)
-        if srcFormat.isInterleaved {
-            // Interleaved: single buffer, copy directly
-            if let dst = srcBuffer.floatChannelData?[0] {
-                let bytes = min(
-                    Int(firstBuffer.mDataByteSize),
-                    Int(frameCount) * MemoryLayout<Float>.size * channelCount
-                )
-                memcpy(dst, data, bytes)
-            }
-        } else {
-            // Non-interleaved: the IO callback delivers interleaved data in a single buffer.
-            // We need to deinterleave into separate channel pointers.
-            let floatPtr = data.assumingMemoryBound(to: Float.self)
-            let totalSamples = Int(frameCount) * channelCount
-
-            if channelCount > 1 && totalSamples > 0 {
-                // Core Audio IO proc typically delivers interleaved Float32
-                for ch in 0..<channelCount {
-                    guard let dst = srcBuffer.floatChannelData?[ch] else { continue }
-                    for frame in 0..<Int(frameCount) {
-                        let idx = frame * channelCount + ch
-                        if idx < totalSamples {
-                            dst[frame] = floatPtr[idx]
-                        }
-                    }
-                }
-            } else if let dst = srcBuffer.floatChannelData?[0] {
-                let bytes = min(
-                    Int(firstBuffer.mDataByteSize),
-                    Int(frameCount) * MemoryLayout<Float>.size
-                )
-                memcpy(dst, data, bytes)
-            }
+        // Calculate output capacity and allocate output buffer
+        let ratio = outFmt.sampleRate / srcFmt.sampleRate
+        let outCapacity = AVAudioFrameCount(ceil(Double(frameCount) * ratio))
+        guard let outBuffer = AVAudioPCMBuffer(pcmFormat: outFmt, frameCapacity: outCapacity) else {
+            OSAtomicIncrement64(&emptyCallbackCount)
+            return
         }
 
-        // Calculate output frame capacity after resampling
-        let ratio = outFmt.sampleRate / srcFormat.sampleRate
-        let outFrameCapacity = AVAudioFrameCount(ceil(Double(frameCount) * ratio))
-        guard let outBuffer = AVAudioPCMBuffer(
-            pcmFormat: outFmt,
-            frameCapacity: outFrameCapacity
-        ) else { return }
-
-        // Perform the conversion (resample + format change)
-        var error: NSError?
+        // Convert (resample + format change)
+        var convError: NSError?
         var hasData = true
-        let convStatus = converter.convert(
-            to: outBuffer,
-            error: &error
-        ) { _, outStatus in
+        let convStatus = converter.convert(to: outBuffer, error: &convError) { _, outStatus in
             if hasData {
                 hasData = false
                 outStatus.pointee = .haveData
@@ -462,12 +274,7 @@ final class AudioTapRecorder {
             }
         }
 
-        if convStatus == .error {
-            OSAtomicIncrement64(&emptyCallbackCount)
-            return
-        }
-
-        guard outBuffer.frameLength > 0 else {
+        guard convStatus != .error, outBuffer.frameLength > 0 else {
             OSAtomicIncrement64(&emptyCallbackCount)
             return
         }
@@ -483,24 +290,74 @@ final class AudioTapRecorder {
         FileHandle.standardOutput.write(rawData)
         OSAtomicIncrement64(&bytesWritten)
     }
+
+    // ---------------------------------------------------------------------------
+    // SCStreamDelegate
+    // ---------------------------------------------------------------------------
+
+    func stream(_ stream: SCStream, didStopWithError error: Error) {
+        log("[AudioCapture] stream stopped with error: \(error)")
+        exit(1)
+    }
+
+    // ---------------------------------------------------------------------------
+    // Private: lazy converter init
+    // ---------------------------------------------------------------------------
+
+    private func initConverter(asbd: AudioStreamBasicDescription) {
+        let isInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
+        log("[AudioCapture] source format: \(asbd.mSampleRate) Hz, \(asbd.mChannelsPerFrame) ch, "
+            + "interleaved=\(isInterleaved)")
+
+        guard let srcFmt = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: asbd.mSampleRate,
+            channels: AVAudioChannelCount(asbd.mChannelsPerFrame),
+            interleaved: isInterleaved
+        ) else {
+            log("[AudioCapture] ERROR: failed to create source AVAudioFormat")
+            return
+        }
+
+        guard let tgtFmt = AVAudioFormat(
+            commonFormat: .pcmFormatInt16,
+            sampleRate: kTargetSampleRate,
+            channels: kTargetChannels,
+            interleaved: true
+        ) else {
+            log("[AudioCapture] ERROR: failed to create target AVAudioFormat")
+            return
+        }
+
+        guard let conv = AVAudioConverter(from: srcFmt, to: tgtFmt) else {
+            log("[AudioCapture] ERROR: failed to create AVAudioConverter")
+            return
+        }
+
+        self.converter = conv
+        self.outputFormat = tgtFmt
+
+        log("[AudioCapture] converter ready: "
+            + "\(srcFmt.sampleRate) Hz \(srcFmt.channelCount)ch Float32 "
+            + "-> \(tgtFmt.sampleRate) Hz \(tgtFmt.channelCount)ch Int16")
+    }
 }
 
 // ---------------------------------------------------------------------------
 // MARK: - Entry point
 // ---------------------------------------------------------------------------
 
-let recorder = AudioTapRecorder()
+let recorder = SCStreamRecorder()
 
 // Set up signal handlers for graceful shutdown
-let sigintSource = DispatchSource.makeSignalSource(signal: SIGINT, queue: .main)
+let sigintSource  = DispatchSource.makeSignalSource(signal: SIGINT,  queue: .main)
 let sigtermSource = DispatchSource.makeSignalSource(signal: SIGTERM, queue: .main)
 
-signal(SIGINT, SIG_IGN)
+signal(SIGINT,  SIG_IGN)
 signal(SIGTERM, SIG_IGN)
 
 let shutdown = {
     recorder.stop()
-    exit(0)
 }
 
 sigintSource.setEventHandler(handler: shutdown)
@@ -508,12 +365,14 @@ sigtermSource.setEventHandler(handler: shutdown)
 sigintSource.resume()
 sigtermSource.resume()
 
-// Start capture
-do {
-    try recorder.start()
-} catch {
-    log("[AudioCapture] FATAL: \(error)")
-    exit(1)
+// Start capture (async — needs MainActor for SCShareableContent)
+Task { @MainActor in
+    do {
+        try await recorder.start()
+    } catch {
+        log("[AudioCapture] FATAL: \(error)")
+        exit(1)
+    }
 }
 
 // Keep alive — audio callbacks run on their own thread
