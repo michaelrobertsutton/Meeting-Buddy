@@ -52,10 +52,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Connect to backend
         ws.connect()
 
-        // Show HUD immediately
-        hudController.show {
+        // Show HUD immediately (unpinned by default; persist last pin state)
+        let initialFloating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+        hudController.show(initialFloating: initialFloating) {
             ContentView(ws: ws)
         }
+        ws.isWindowFloating = initialFloating
 
         // Toolbar "Hide" button posts this; we hide the panel
         hideObserver = NotificationCenter.default.addObserver(
@@ -76,6 +78,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let newState = !self.ws.isWindowFloating
             self.hudController.setFloating(newState)
             self.ws.isWindowFloating = newState
+            UserDefaults.standard.set(newState, forKey: HUDPanelController.windowFloatingKey)
         }
 
         // Register global hotkey (Alt+Space) to toggle HUD
@@ -140,8 +143,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleHUD() {
-        hudController.toggle {
+        let initialFloating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+        hudController.toggle(initialFloating: initialFloating) {
             ContentView(ws: ws)
+        }
+        if hudController.isVisible {
+            ws.isWindowFloating = initialFloating
         }
     }
 }
