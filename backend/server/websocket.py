@@ -66,6 +66,10 @@ class TranscriptWebSocket(CommandsMixin):
 
         # Latency instrumentation (best-effort; values in milliseconds)
         self._latency_last: dict | None = None
+        # Speculative retrieval state
+        self._speculative_task: asyncio.Task | None = None
+        self._speculative_question: str | None = None
+        self._speculative_chunks: list | None = None
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -200,6 +204,21 @@ class TranscriptWebSocket(CommandsMixin):
 
     # --- Transcript broadcast (unchanged) ---
 
+    async def _run_speculative_retrieval(self, question):
+        """Kick off LanceDB retrieval speculatively (before debounce fires)."""
+        try:
+            engine = self._synthesis_engine
+            if not engine or not engine._retriever:
+                return
+            loop = asyncio.get_event_loop()
+            chunks = await loop.run_in_executor(None, engine._retriever.retrieve, question)
+            self._speculative_chunks = chunks
+            logger.debug("[Speculative] Done: %s (%d chunks)", question, len(chunks))
+        except asyncio.CancelledError:
+            pass
+        except Exception:
+            logger.exception("[Speculative] Retrieval failed")
+
     async def _broadcast_loop(self) -> None:
         """Poll for transcript updates and broadcast to all clients."""
         last_version = -1
@@ -218,6 +237,16 @@ class TranscriptWebSocket(CommandsMixin):
                     self._extractor.update()
                 else:
                     logger.warning("[WebSocket] Transcript changed but no extractor available")
+
+            candidate = self._extractor.candidate_question if self._extractor else None
+            if candidate and candidate != self._speculative_question:
+                if self._speculative_task and not self._speculative_task.done():
+                    self._speculative_task.cancel()
+                self._speculative_question = candidate
+                self._speculative_chunks = None
+                self._speculative_task = asyncio.create_task(
+                    self._run_speculative_retrieval(candidate)
+                )
 
             question = self._extractor.current_question if self._extractor else None
             question_changed = question != self._last_question
@@ -296,13 +325,19 @@ class TranscriptWebSocket(CommandsMixin):
         await self._broadcast_event({"type": "synthesis_searching", "question": question})
         try:
             # Get recent transcript context (last 90 seconds) for disambiguation
-            transcript_context = self.buffer.get_recent_text(lookback_seconds=90.0)
+            transcript_context = self.buffer.get_recent_text(lookback_seconds=self.config.transcript_lookback_s)
 
-            # Use streaming synthesis
+            # Use streaming synthesis (with speculative prefetch if available)
+            prefetched = None
+            if self._speculative_question == question and self._speculative_chunks is not None:
+                prefetched = self._speculative_chunks
+                self._speculative_chunks = None
+                logger.info("[Speculative] Prefetch hit for synthesis: %s", question)
             full_text = ""
             streamed = False
             async for delta in self._synthesis_engine.synthesize_stream(
-                question, transcript_context=transcript_context
+                question, transcript_context=transcript_context,
+                prefetched_chunks=prefetched,
             ):
                 if first_delta_ms is None:
                     first_delta_ms = round((time.monotonic() - t0) * 1000.0, 1)
@@ -346,6 +381,7 @@ class TranscriptWebSocket(CommandsMixin):
                         "ttft_ms": first_delta_ms,
                         "total_ms": total_ms,
                         "retrieval_ms": getattr(self._synthesis_engine, "last_retrieval_ms", None),
+                        "cache_hit": getattr(self._synthesis_engine, "cache_hit", False),
                         "mode": "non_streaming_fallback",
                     }
 
@@ -365,6 +401,8 @@ class TranscriptWebSocket(CommandsMixin):
                 }
 
                 self._active_answer = result_dict
+                from backend.synthesis.engine import SynthesisResult as _SR
+                self._synthesis_engine.cache_result(question, _SR(**result_dict))
                 # Append to in-memory Q&A history for this session
                 self._qa_history.append(
                     {
@@ -384,6 +422,7 @@ class TranscriptWebSocket(CommandsMixin):
                     "ttft_ms": first_delta_ms,
                     "total_ms": total_ms,
                     "retrieval_ms": getattr(self._synthesis_engine, "last_retrieval_ms", None),
+                    "cache_hit": getattr(self._synthesis_engine, "cache_hit", False),
                     "mode": "streaming",
                 }
 

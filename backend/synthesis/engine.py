@@ -3,13 +3,17 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import time
+from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
 from backend.synthesis.prompt import SYSTEM_PROMPT, build_user_prompt
 
 logger = logging.getLogger(__name__)
+
+_CACHE_MAX = 20
 
 # ChatGPT backend for OAuth (uses ChatGPT Plus/Pro subscription quota)
 _CHATGPT_BACKEND_URL = "https://chatgpt.com/backend-api/codex/responses"
@@ -52,6 +56,11 @@ class SynthesisEngine:
         self._last_question: str | None = None
         self._last_result: SynthesisResult | None = None
         self._last_retrieval_ms: float | None = None
+        # LRU cache
+        self._project_slug: str | None = None
+        self._result_cache: OrderedDict[str, SynthesisResult] = OrderedDict()
+        self._chunks_cache: OrderedDict[str, list] = OrderedDict()
+        self._cache_hit: bool = False
         # OAuth fields (set via reinit_client_oauth)
         self._oauth_token: str | None = None
         self._chatgpt_account_id: str | None = None
@@ -75,41 +84,75 @@ class SynthesisEngine:
         self._last_question = None
         logger.info("Synthesis client reinitialized for ChatGPT backend (model=%s, account=%s)", _CHATGPT_DEFAULT_MODEL, chatgpt_account_id[:8] + "...")
 
-    def set_retriever(self, retriever) -> None:
-        """Swap the retriever (e.g. after project switch)."""
+    def set_retriever(self, retriever, project_slug=None):
+        """Swap the retriever (e.g. after project switch). Clears the LRU cache."""
         self._retriever = retriever
+        self._project_slug = project_slug
         self._last_question = None
         self._last_result = None
         self._last_retrieval_ms = None
+        self._result_cache.clear()
+        self._chunks_cache.clear()
+
+    def _cache_key(self, question):
+        norm = re.sub(r'\s+', ' ', question.strip().lower())
+        return f"{self._project_slug or ''}|{norm}"
+
+    def _cache_put(self, key, result, chunks):
+        for d in (self._result_cache, self._chunks_cache):
+            d.pop(key, None)
+        self._result_cache[key] = result
+        self._chunks_cache[key] = chunks
+        while len(self._result_cache) > _CACHE_MAX:
+            self._result_cache.popitem(last=False)
+            self._chunks_cache.popitem(last=False)
+
+    def cache_result(self, question, result, chunks=None):
+        """Store a result in the LRU cache."""
+        self._cache_put(self._cache_key(question), result, chunks or [])
+
+    @property
+    def cache_hit(self):
+        """True if the last synthesize call was served from cache."""
+        return self._cache_hit
 
     @property
     def last_retrieval_ms(self) -> float | None:
         """Retrieval latency in milliseconds from the most recent synthesis call."""
         return self._last_retrieval_ms
 
-    async def synthesize(self, question: str, transcript_context: str | None = None) -> SynthesisResult | None:
+    async def synthesize(self, question, transcript_context=None):
         """Synthesize an answer for the given question. Returns None if unchanged."""
+        key = self._cache_key(question)
+        if key in self._result_cache:
+            self._cache_hit = True
+            self._last_question = question
+            self._last_result = self._result_cache[key]
+            return self._last_result
+        self._cache_hit = False
         if question == self._last_question:
             return None
-
         self._last_question = question
         result = await self._synthesize_uncached(question, transcript_context=transcript_context)
         self._last_result = result
         return result
 
-    async def synthesize_stream(
-        self, question: str, transcript_context: str | None = None
-    ) -> AsyncGenerator[str, None]:
-        """
-        Synthesize with streaming. Yields partial text deltas.
-        Caller should accumulate and parse final JSON.
-        """
+    async def synthesize_stream(self, question, transcript_context=None, prefetched_chunks=None):
+        """Synthesize with streaming. Yields partial text deltas."""
+        key = self._cache_key(question)
+        if key in self._result_cache:
+            self._cache_hit = True
+            self._last_question = question
+            self._last_result = self._result_cache[key]
+            return  # no yields -> websocket fallback hits synthesize() -> returns cached result
+        self._cache_hit = False
         if question == self._last_question:
-            # Return cached result - no streaming needed
             return
-
         self._last_question = question
-        async for delta in self._synthesize_stream_uncached(question, transcript_context=transcript_context):
+        async for delta in self._synthesize_stream_uncached(
+            question, transcript_context=transcript_context,
+            prefetched_chunks=prefetched_chunks,
+        ):
             yield delta
 
     async def synthesize_batch(self, questions: list[str]) -> dict[str, SynthesisResult]:
@@ -198,6 +241,8 @@ class SynthesisEngine:
                     if c.get("doc") in valid_titles
                 ]
 
+            key = self._cache_key(question)
+            self._cache_put(key, result, results)
             logger.info(
                 "Synthesis complete: %d bullets, confidence=%.2f",
                 len(result.bullets), result.confidence,
@@ -306,13 +351,12 @@ class SynthesisEngine:
             raise RuntimeError("No text output in ChatGPT backend response")
         return full_text
 
-    async def _synthesize_stream_uncached(
-        self, question: str, transcript_context: str | None = None
-    ) -> AsyncGenerator[str, None]:
+    async def _synthesize_stream_uncached(self, question, transcript_context=None, prefetched_chunks=None):
         """Synthesize with streaming support. Yields text deltas."""
-        # Retrieve context chunks
-        results = []
-        if self._retriever:
+        if prefetched_chunks is not None:
+            results = prefetched_chunks
+            self._last_retrieval_ms = 0.0
+        elif self._retriever:
             loop = asyncio.get_event_loop()
             t_ret = time.monotonic()
             results = await loop.run_in_executor(
@@ -321,6 +365,7 @@ class SynthesisEngine:
             self._last_retrieval_ms = round((time.monotonic() - t_ret) * 1000.0, 1)
             logger.info("Retrieved %d chunks for synthesis (%.1f ms)", len(results), self._last_retrieval_ms)
         else:
+            results = []
             self._last_retrieval_ms = None
 
         doc_registry = None

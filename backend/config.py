@@ -44,7 +44,8 @@ class StreamingConfig:
 class ServerConfig:
     host: str = "localhost"
     port: int = 8765
-    poll_interval_ms: int = 200  # How often to check for new segments
+    poll_interval_ms: int = 50  # How often to check for new segments
+    transcript_lookback_s: float = 45.0  # Transcript context window for synthesis
 
 
 @dataclass
@@ -72,7 +73,7 @@ class IngestRuntimeConfig:
 class SynthesisConfig:
     model: str = "gpt-4o-mini"
     temperature: float = 0.2
-    max_tokens: int = 1500
+    max_tokens: int = 900
     enabled: bool = True
 
 
