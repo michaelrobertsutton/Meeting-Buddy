@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import AVFoundation
 
 struct PermissionsView: View {
 
@@ -7,6 +8,9 @@ struct PermissionsView: View {
         case screenCapture = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
         case microphone = "x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone"
     }
+
+    @State private var screenRecordingGranted: Bool = false
+    @State private var microphoneGranted: Bool = false
 
     var body: some View {
         Form {
@@ -18,6 +22,7 @@ struct PermissionsView: View {
             Section("Required") {
                 permissionRow(
                     title: "Screen Recording",
+                    granted: screenRecordingGranted,
                     description: "Required for capturing system audio (e.g. meeting audio, browser playback) via ScreenCaptureKit. Grant access to \"Meeting Buddy\" (or Terminal when running from the command line).",
                     buttonTitle: "Open Screen Recording settings",
                     urlString: PrivacyPane.screenCapture.rawValue
@@ -27,6 +32,7 @@ struct PermissionsView: View {
             Section("Optional") {
                 permissionRow(
                     title: "Microphone",
+                    granted: microphoneGranted,
                     description: "Optional; only needed if you add microphone input in the future. Not required for system audio capture.",
                     buttonTitle: "Open Microphone settings",
                     urlString: PrivacyPane.microphone.rawValue
@@ -35,17 +41,28 @@ struct PermissionsView: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Permissions")
+        .onAppear { checkPermissions() }
+    }
+
+    private func checkPermissions() {
+        screenRecordingGranted = CGPreflightScreenCaptureAccess()
+        microphoneGranted = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     }
 
     private func permissionRow(
         title: String,
+        granted: Bool,
         description: String,
         buttonTitle: String,
         urlString: String
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
+            HStack(spacing: 6) {
+                Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                    .foregroundStyle(granted ? .green : .orange)
+                Text(title)
+                    .font(.headline)
+            }
             Text(description)
                 .font(.caption)
                 .foregroundStyle(.secondary)

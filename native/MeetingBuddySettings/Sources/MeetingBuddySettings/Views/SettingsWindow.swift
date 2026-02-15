@@ -27,9 +27,12 @@ struct SettingsWindow: View {
     var body: some View {
         NavigationSplitView {
             List(SettingsSection.allCases, selection: $selection) { section in
-                Label(section.rawValue, systemImage: section.systemImage)
+                let isActive = (selection == section)
+                Label(section.rawValue, systemImage: isActive ? section.systemImage + ".fill" : section.systemImage)
+                    .symbolVariant(isActive ? .fill : .none)
                     .tag(section)
             }
+            .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(180)
         } detail: {
             Group {
@@ -44,7 +47,7 @@ struct SettingsWindow: View {
                     PermissionsView()
                 }
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
         .frame(minWidth: 700, minHeight: 500)
         .alert("Error", isPresented: Binding(
