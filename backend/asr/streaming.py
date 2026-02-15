@@ -120,16 +120,20 @@ class StreamingASR:
     def _loop(self) -> None:
         """Main processing loop (runs in background thread)."""
         while not self._stop_event.is_set():
-            frame = self.capture.read_frame(timeout=0.5)
-            if frame is None:
-                continue
-            if self._paused:
-                continue
+            try:
+                frame = self.capture.read_frame(timeout=0.5)
+                if frame is None:
+                    continue
+                if self._paused:
+                    continue
 
-            if self._state == _State.IDLE:
-                self._handle_idle(frame)
-            elif self._state == _State.ACCUMULATING:
-                self._handle_accumulating(frame)
+                if self._state == _State.IDLE:
+                    self._handle_idle(frame)
+                elif self._state == _State.ACCUMULATING:
+                    self._handle_accumulating(frame)
+            except Exception:
+                logger.exception("Unexpected error in ASR loop — resetting to IDLE")
+                self._reset_to_idle()
 
     def _handle_idle(self, frame: np.ndarray) -> None:
         """In IDLE state: run VAD, buffer pre-speech audio."""
