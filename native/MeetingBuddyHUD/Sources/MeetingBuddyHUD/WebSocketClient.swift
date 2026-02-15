@@ -24,6 +24,8 @@ final class WebSocketClient: ObservableObject {
     // UI state
     @Published var isPinned: Bool = false
     @Published var isListening: Bool = true
+    /// Whether the HUD window is floating (always on top). Toggled by the pin toolbar button.
+    @Published var isWindowFloating: Bool = true
 
     @Published var segments: [TranscriptSegment] = []
     @Published var lastTranscriptAt: Date? = nil
