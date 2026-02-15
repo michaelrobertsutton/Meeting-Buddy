@@ -61,8 +61,8 @@ struct PermissionsView: View {
     ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
-                    .foregroundStyle(granted ? .green : .orange)
+                Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                    .foregroundStyle(granted ? .green : .red)
                     .accessibilityLabel("\(title): \(granted ? "granted" : "not granted")")
                 Text(title)
                     .font(.headline)

@@ -9,6 +9,7 @@ struct QAHistoryView: View {
     private let collapsedCount = 3
 
     @State private var expanded: Bool = false
+    @State private var hoveringShowAll: Bool = false
 
     private var displayedEntries: [QAEntry] {
         let all = ws.qaHistory.reversed() as [QAEntry]
@@ -32,9 +33,10 @@ struct QAHistoryView: View {
                     } label: {
                         Text(expanded ? "Show less" : "Show all (\(ws.qaHistory.count))")
                             .font(.caption2)
-                            .foregroundStyle(AppTheme.textSecondary)
+                            .foregroundStyle(hoveringShowAll ? AppTheme.textPrimary : AppTheme.textSecondary)
                     }
                     .buttonStyle(.plain)
+                    .onHover { hoveringShowAll = $0 }
                 }
             }
 
@@ -75,8 +77,10 @@ private struct QAHistoryRow: View {
 
                 if entry.answer != nil {
                     Image(systemName: detailExpanded ? "chevron.up" : "chevron.down")
-                        .font(.caption2)
+                        .font(.caption)
                         .foregroundStyle(AppTheme.textSecondary)
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
                 }
             }
             .contentShape(Rectangle())

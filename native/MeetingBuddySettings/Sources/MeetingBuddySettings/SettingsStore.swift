@@ -201,6 +201,15 @@ class SettingsStore: ObservableObject {
         }
     }
 
+    func updateDocMeta(title: String, priority: String) async {
+        do {
+            try await sendCommand("update_doc_meta", params: ["title": title, "priority": priority])
+            await fetchDocs()
+        } catch {
+            showToast(error.localizedDescription)
+        }
+    }
+
     func startLogin() async {
         do {
             let data = try await sendCommand("start_login")

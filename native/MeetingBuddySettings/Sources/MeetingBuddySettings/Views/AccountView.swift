@@ -34,10 +34,12 @@ struct AccountView: View {
         .animation(.default, value: apiKeySaved)
     }
 
+    private static let accentBlue = Color(red: 0x60/255.0, green: 0xB6/255.0, blue: 0xF2/255.0)
+
     private func statusBadge(active: Bool) -> some View {
         Text(active ? "Active" : "Inactive")
             .font(.caption)
-            .foregroundStyle(active ? Color.green : Color.secondary)
+            .foregroundStyle(active ? Self.accentBlue : Color.secondary)
     }
 
     @ViewBuilder
@@ -83,6 +85,7 @@ struct AccountView: View {
                     apiKeyInput = ""
                     showApiKeyField = true
                 }
+                .buttonStyle(.bordered)
             }
         }
 
@@ -102,6 +105,7 @@ struct AccountView: View {
                             apiKeySaved = false
                         }
                     }
+                    .buttonStyle(.borderedProminent)
                     .disabled(apiKeyInput.isEmpty)
 
                     if apiKeySaved {
