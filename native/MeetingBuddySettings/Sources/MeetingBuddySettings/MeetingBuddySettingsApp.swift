@@ -1,9 +1,18 @@
 import SwiftUI
 import AppKit
 
+final class SettingsAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        // Suppress dock icon — Settings is a transient panel, not a standalone app.
+        NSApp.setActivationPolicy(.accessory)
+        // Bring to front after suppressing dock presence.
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
 @main
 struct MeetingBuddySettingsApp: App {
-
+    @NSApplicationDelegateAdaptor(SettingsAppDelegate.self) var appDelegate
     @StateObject private var store = SettingsStore()
 
     var body: some Scene {
@@ -12,9 +21,6 @@ struct MeetingBuddySettingsApp: App {
                 .environmentObject(store)
                 .onAppear {
                     store.start()
-                    // When launched via Process.run() the app is not the active foreground app.
-                    // Activate here (window is already created) so it comes to front.
-                    NSApp?.activate(ignoringOtherApps: true)
                     Task {
                         await store.fetchSettings()
                         await store.fetchDocs()
