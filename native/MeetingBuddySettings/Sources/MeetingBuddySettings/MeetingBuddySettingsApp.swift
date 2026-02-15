@@ -8,15 +8,11 @@ final class SettingsAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
-@main
+// @main removed — entry point is main.swift, which sets activation policy
+// before NSApplicationMain runs so the dock icon never appears.
 struct MeetingBuddySettingsApp: App {
     @NSApplicationDelegateAdaptor(SettingsAppDelegate.self) var appDelegate
     @StateObject private var store = SettingsStore()
-
-    init() {
-        // Must be set before the run loop starts to prevent the dock icon flash.
-        NSApp.setActivationPolicy(.accessory)
-    }
 
     var body: some Scene {
         WindowGroup("Meeting Buddy Settings") {
