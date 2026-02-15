@@ -60,62 +60,31 @@ The first run downloads the Whisper model (~500MB for `small`) — one-time only
 
 ### Building and Installing the App Bundle
 
-**Quick install (all-in-one command):**
-
 ```bash
-# Replace with your actual project path
-cd "/path/to/Meeting Buddy" && \
-git checkout main && git pull origin main && \
-source .venv/bin/activate && \
-cd audio-capture && swift build -c release && cd .. && \
-cd ui && npm run tauri build && cd .. && \
-rm -rf "/Applications/Meeting Buddy.app" && \
-cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
+bash scripts/build-release.sh
 ```
 
-Or if you're already in the project directory (or any subdirectory):
+This builds all Swift sidecars (AudioCapture, MeetingBuddyHUD, MeetingBuddySettings), runs `npm run tauri build`, and produces:
 
-```bash
-cd "$(git rev-parse --show-toplevel)" && \
-git checkout main && git pull origin main && \
-source .venv/bin/activate && \
-cd audio-capture && swift build -c release && cd .. && \
-cd ui && npm run tauri build && cd .. && \
-rm -rf "/Applications/Meeting Buddy.app" && \
-cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
-```
-
-**Step-by-step (if you prefer):**
-
-```bash
-# Ensure you're in the project root with venv activated
-source .venv/bin/activate
-
-# Build the Swift audio capture helper (required for bundling)
-cd audio-capture && swift build -c release && cd ..
-
-# Build the Tauri app bundle
-cd ui
-npm run tauri build
-cd ..
-```
-
-This creates a `.app` bundle at:
 ```
 ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app
+dist/MeetingBuddy.dmg  # if hdiutil is available
 ```
 
 Then install to Applications:
 
 ```bash
-# Remove old version if it exists (optional)
 rm -rf "/Applications/Meeting Buddy.app"
-
-# Install new version
 cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
 ```
 
-**Note:** The bundled app includes the Tauri process manager + tray, Python backend as a sidecar, AudioCapture Swift binary, and native SwiftUI sidecars (HUD + Settings). The app bundle expects to find the project's `.venv` directory at runtime.
+**Runtime venv resolution** — the backend sidecar looks for a Python venv in this order:
+1. `$MEETINGBUDDY_VENV` (env var override)
+2. `~/.meeting-buddy/venv`
+3. `Contents/Resources/venv` (embedded in the bundle)
+4. `$MEETINGBUDDY_PROJECT_ROOT/.venv` (dev fallback)
+
+Run `bash scripts/install.sh` once on a fresh machine to create `~/.meeting-buddy/venv`.
 
 ## Usage
 
@@ -218,6 +187,7 @@ We can unify Settings into the HUD later, but the current behavior is intentiona
 | Shortcut | Action |
 |----------|--------|
 | `Option+Space` | Toggle HUD visibility |
+| `Cmd+H` | Hide HUD (bring back with Option+Space) |
 | `Cmd+,` | Open Settings |
 | `Cmd+K` | Clear Session (UI reset) |
 | `Cmd+Shift+P` | Pin/unpin output (freeze while you speak) |
