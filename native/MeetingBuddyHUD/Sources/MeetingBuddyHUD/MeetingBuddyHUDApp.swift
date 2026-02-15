@@ -3,6 +3,8 @@ import AppKit
 
 extension Notification.Name {
     static let meetingBuddyHUDHide = Notification.Name("MeetingBuddyHUD.Hide")
+    /// Sent by the toolbar pin button to toggle the window's always-on-top state.
+    static let meetingBuddyHUDToggleWindowPin = Notification.Name("MeetingBuddyHUD.ToggleWindowPin")
 }
 
 @main
@@ -32,6 +34,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsHotkeyGlobalMonitor: Any?
     private var settingsHotkeyLocalMonitor: Any?
     private var hideObserver: NSObjectProtocol?
+    private var windowPinObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon (menu bar app / accessory)
@@ -54,6 +57,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.hudController.hide()
         }
 
+        // Toolbar pin button toggles window always-on-top state
+        windowPinObserver = NotificationCenter.default.addObserver(
+            forName: .meetingBuddyHUDToggleWindowPin,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self else { return }
+            let newState = !self.ws.isWindowFloating
+            self.hudController.setFloating(newState)
+            self.ws.isWindowFloating = newState
+        }
+
         // Register global hotkey (Alt+Space) to toggle HUD
         hotkey = GlobalHotkey { [weak self] in
             self?.toggleHUD()
@@ -73,6 +88,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationWillTerminate(_ notification: Notification) {
         if let observer = hideObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = windowPinObserver {
             NotificationCenter.default.removeObserver(observer)
         }
         hotkey?.unregister()

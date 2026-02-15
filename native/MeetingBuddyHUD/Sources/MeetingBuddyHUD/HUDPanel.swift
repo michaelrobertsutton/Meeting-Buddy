@@ -8,12 +8,10 @@ final class HUDPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: AppTheme.windowWidth, height: AppTheme.windowHeight),
-            styleMask: [.nonactivatingPanel, .titled, .closable, .miniaturizable, .resizable],
+            styleMask: [.nonactivatingPanel, .titled, .closable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-
-        title = "Meeting Buddy"
 
         // Floating panel behavior
         level = .floating
@@ -21,14 +19,25 @@ final class HUDPanel: NSPanel {
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
 
-        // Standard title bar: system draws traffic lights and title; content is only below it
-        titlebarAppearsTransparent = false
-        titleVisibility = .visible
+        // Transparent titlebar so SwiftUI content fills the full window;
+        // the root ZStack clipShape is the sole rounded-corner provider (no double-corner).
+        titlebarAppearsTransparent = true
+        titleVisibility = .hidden
+
+        // Hide traffic lights — close/minimise/zoom are managed via toolbar chevron + hotkeys
+        standardWindowButton(.closeButton)?.isHidden = true
+        standardWindowButton(.miniaturizeButton)?.isHidden = true
+        standardWindowButton(.zoomButton)?.isHidden = true
 
         minSize = NSSize(width: 340, height: 400)
 
         isOpaque = false
         backgroundColor = .clear
+    }
+
+    // Toggle window level between floating (always-on-top) and normal (can go behind).
+    func setFloating(_ floating: Bool) {
+        level = floating ? .floating : .normal
     }
 }
 
@@ -114,6 +123,10 @@ final class HUDPanelController {
 
     var isVisible: Bool {
         panel?.isVisible ?? false
+    }
+
+    func setFloating(_ floating: Bool) {
+        panel?.setFloating(floating)
     }
 
     // MARK: - Position persistence

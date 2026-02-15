@@ -37,18 +37,44 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
+            // Error banner — slides in above footer when an error is active (#239)
+            if let err = ws.lastError, !err.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color(hex: "#EF5350"))
+                    Text(err)
+                        .font(.caption)
+                        .foregroundStyle(Color(hex: "#EF5350"))
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Button {
+                        ws.lastError = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(Color.white.opacity(0.60))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color(hex: "#EF5350").opacity(0.15))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             Divider()
                 .background(Color.white.opacity(0.08))
 
             // Footer / Status bar
             HUDStatusBarView(
                 connectionState: ws.connectionState,
-                isPinned: ws.isPinned,
-                lastError: ws.lastError,
+                isPinned: ws.isWindowFloating,
                 lastExportPath: ws.lastExportPath
             )
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fontDesign(.rounded)
+        .animation(.easeInOut(duration: 0.25), value: ws.lastError)
     }
 }

@@ -113,11 +113,11 @@ struct HUDToolbarView: View {
                     }
 
                     toolbarButton(
-                        systemName: ws.isPinned ? "pin.fill" : "pin",
-                        help: "Pin current answer to list",
+                        systemName: ws.isWindowFloating ? "pin.fill" : "pin",
+                        help: ws.isWindowFloating ? "Allow window behind other windows" : "Keep window on top",
                         hovering: $hoveringPin
                     ) {
-                        Task { await ws.togglePin() }
+                        NotificationCenter.default.post(name: .meetingBuddyHUDToggleWindowPin, object: nil)
                     }
 
                     Button {

@@ -5,24 +5,24 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # --- Project root (must resolve before venv lookup) ---
 if [ -z "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
-    if [[ "$SCRIPT_DIR" == *"/Contents/MacOS"* ]]; then
-        APP_BUNDLE="$SCRIPT_DIR/../.."
-        CANDIDATE="$(cd "$APP_BUNDLE/../../../../../../.." 2>/dev/null && pwd)" || CANDIDATE=""
-        if [ -n "$CANDIDATE" ] && [ -f "$CANDIDATE/backend/main.py" ]; then
-            export MEETINGBUDDY_PROJECT_ROOT="$CANDIDATE"
+    # 1. Walk up from SCRIPT_DIR — works for dev mode (source tree) or .app next to source
+    WALK="$SCRIPT_DIR"
+    while true; do
+        if [ -f "$WALK/backend/main.py" ]; then
+            export MEETINGBUDDY_PROJECT_ROOT="$WALK"
+            break
         fi
-    else
-        # Dev mode: walk up from SCRIPT_DIR until we find backend/main.py or hit filesystem root
-        WALK="$SCRIPT_DIR"
-        while true; do
-            if [ -f "$WALK/backend/main.py" ]; then
-                export MEETINGBUDDY_PROJECT_ROOT="$WALK"
-                break
-            fi
-            NEXT="$(cd "$WALK/.." && pwd)"
-            [ "$NEXT" = "$WALK" ] && break
-            WALK="$NEXT"
-        done
+        NEXT="$(cd "$WALK/.." && pwd)"
+        [ "$NEXT" = "$WALK" ] && break
+        WALK="$NEXT"
+    done
+fi
+
+# 2. Check ~/.meeting-buddy/project_root (set by installer or user)
+if [ -z "${MEETINGBUDDY_PROJECT_ROOT:-}" ] && [ -f "$HOME/.meeting-buddy/project_root" ]; then
+    STORED="$(cat "$HOME/.meeting-buddy/project_root")"
+    if [ -f "$STORED/backend/main.py" ]; then
+        export MEETINGBUDDY_PROJECT_ROOT="$STORED"
     fi
 fi
 
