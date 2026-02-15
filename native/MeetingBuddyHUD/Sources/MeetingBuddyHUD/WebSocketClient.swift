@@ -155,6 +155,30 @@ final class WebSocketClient: ObservableObject {
     private func handle(text: String) {
         guard let data = text.data(using: .utf8) else { return }
 
+        // Handle command responses FIRST. BackendMessage also decodes response messages
+        // (it shares the id/success/type fields), so we must check for responses before
+        // falling into the broadcast-snapshot path — otherwise the pending callback
+        // never fires and async commands (pause, export, etc.) silently hang.
+        if let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+           let type = obj["type"] as? String, type == "response",
+           let id = obj["id"] as? String {
+            let success = (obj["success"] as? Bool) ?? false
+            if success {
+                let payload = (obj["data"] as? [String: Any]) ?? [:]
+                pendingQueue.async {
+                    if let cb = self.pending.removeValue(forKey: id) { cb(.success(payload)) }
+                }
+            } else {
+                let errMsg = (obj["error"] as? String) ?? "Unknown error"
+                let err = NSError(domain: "WebSocketClient", code: 0,
+                                  userInfo: [NSLocalizedDescriptionKey: errMsg])
+                pendingQueue.async {
+                    if let cb = self.pending.removeValue(forKey: id) { cb(.failure(err)) }
+                }
+            }
+            return
+        }
+
         if let msg = try? JSONDecoder().decode(BackendMessage.self, from: data) {
             DispatchQueue.main.async {
                 if let segs = msg.segments {
@@ -208,26 +232,6 @@ final class WebSocketClient: ObservableObject {
             return
         }
 
-        guard let obj = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return }
-        guard let type = obj["type"] as? String, type == "response", let id = obj["id"] as? String else { return }
-
-        let success = (obj["success"] as? Bool) ?? false
-        if success {
-            let payload = (obj["data"] as? [String: Any]) ?? [:]
-            pendingQueue.async {
-                if let cb = self.pending.removeValue(forKey: id) {
-                    cb(.success(payload))
-                }
-            }
-        } else {
-            let errMsg = (obj["error"] as? String) ?? "Unknown error"
-            let err = NSError(domain: "WebSocketClient", code: 0, userInfo: [NSLocalizedDescriptionKey: errMsg])
-            pendingQueue.async {
-                if let cb = self.pending.removeValue(forKey: id) {
-                    cb(.failure(err))
-                }
-            }
-        }
     }
 
     // MARK: - Commands
