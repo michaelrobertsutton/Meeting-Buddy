@@ -246,16 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
         clearSession();
     });
     
-    // Listen for backend termination event
-    listen('backend-terminated', (event) => {
-        console.error('[Backend] Sidecar terminated with code:', event.payload);
-        setConnectionStatus('disconnected');
-        if (dom.backendStatus) {
-            dom.backendStatus.textContent = `Backend: Crashed (code ${event.payload})`;
-            dom.backendStatus.className = 'error';
-        }
-    });
-
     // Onboarding actions
     function showOnboarding() {
         if (!dom.onboarding) {
@@ -512,13 +502,35 @@ document.addEventListener('DOMContentLoaded', () => {
                 connectWebSocket();
             });
             listen('backend-terminated', (event) => {
-                const payload = event?.payload;
-                console.warn('[backend] terminated', payload);
+                const d = event?.payload;
+                console.warn('[backend] terminated', d);
                 setConnectionStatus('disconnected');
-                // Best-effort: surface details in the settings hint if present.
-                if (dom.backendHint && payload) {
-                    dom.backendHint.textContent = `Backend terminated (code=${payload[0] ?? 'n/a'}, signal=${payload[1] ?? 'n/a'}).`;
-                    dom.backendHint.classList.remove('hidden');
+
+                // Human-readable diagnostics in Settings.
+                try {
+                    const code = d?.last_exit_code ?? 'n/a';
+                    const signal = d?.last_exit_signal ?? 'n/a';
+                    const spawnErr = d?.last_spawn_error;
+                    const stderrTail = Array.isArray(d?.stderr_tail) ? d.stderr_tail : [];
+
+                    if (dom.backendStatus) {
+                        dom.backendStatus.textContent = 'Backend: Disconnected';
+                        dom.backendStatus.className = 'settings-status error';
+                    }
+
+                    if (dom.backendHint) {
+                        const lines = [];
+                        lines.push(`Backend terminated (code=${code}, signal=${signal}).`);
+                        if (spawnErr) lines.push(`Spawn error: ${spawnErr}`);
+                        if (stderrTail.length) {
+                            lines.push('--- stderr (tail) ---');
+                            lines.push(...stderrTail.slice(-10));
+                        }
+                        dom.backendHint.textContent = lines.join('\n');
+                        dom.backendHint.classList.remove('hidden');
+                    }
+                } catch (e) {
+                    console.debug('[backend] failed to render diagnostics', e);
                 }
             });
         }

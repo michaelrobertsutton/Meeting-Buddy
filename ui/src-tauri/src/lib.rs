@@ -1,4 +1,6 @@
 use std::sync::Mutex;
+
+use serde::Serialize;
 use tauri::Emitter;
 use tauri::Manager;
 use tauri_plugin_shell::process::CommandChild;
@@ -12,6 +14,23 @@ struct HudChild(Mutex<Option<CommandChild>>);
 
 /// Holds the backend sidecar child process so we can kill it on app exit.
 struct BackendChild(Mutex<Option<CommandChild>>);
+
+#[derive(Debug, Clone, Serialize, Default)]
+struct BackendDiagnostics {
+    ready_seen: bool,
+    last_exit_code: Option<i32>,
+    last_exit_signal: Option<i32>,
+    last_spawn_error: Option<String>,
+    stderr_tail: Vec<String>,
+}
+
+/// In-memory diagnostics for the backend sidecar.
+struct BackendDiagState(Mutex<BackendDiagnostics>);
+
+#[tauri::command]
+fn get_backend_diagnostics(state: tauri::State<'_, BackendDiagState>) -> BackendDiagnostics {
+    state.0.lock().unwrap().clone()
+}
 
 /// Kill any existing sidecar in `state`, then spawn `name` and store the child.
 /// Returns Ok(()) on success, Err with message on failure.
@@ -130,6 +149,8 @@ pub fn run() {
 
             // --- Spawn the Python backend sidecar ---
 
+            app.manage(BackendDiagState(Mutex::new(BackendDiagnostics::default())));
+
             let app_handle = app.handle().clone();
 
             let shell = app.shell();
@@ -147,6 +168,12 @@ pub fn run() {
                             Ok((mut rx, child)) => {
                                 log::info!("Backend sidecar spawned successfully");
 
+                                // Reset diagnostics on a fresh spawn.
+                                if let Some(diag) = app.try_state::<BackendDiagState>() {
+                                    let mut d = diag.0.lock().unwrap();
+                                    *d = BackendDiagnostics::default();
+                                }
+
                                 app.manage(BackendChild(Mutex::new(Some(child))));
 
                                 spawned = true;
@@ -163,6 +190,11 @@ pub fn run() {
                                             CommandEvent::Stdout(line) => {
                                                 let s = String::from_utf8_lossy(&line);
                                                 if s.contains("MEETING_BUDDY_READY") {
+                                                    if let Some(diag) = app_handle_clone.try_state::<BackendDiagState>() {
+                                                        let mut d = diag.0.lock().unwrap();
+                                                        d.ready_seen = true;
+                                                        d.last_spawn_error = None;
+                                                    }
                                                     let _ = app_handle_clone.emit("backend-ready", ());
                                                 }
                                                 log::info!("[backend] {}", s.trim());
@@ -171,13 +203,19 @@ pub fn run() {
                                             CommandEvent::Stderr(line) => {
                                                 let s = String::from_utf8_lossy(&line);
 
+                                                let text = s.trim().to_string();
+
+                                                if let Some(diag) = app_handle_clone.try_state::<BackendDiagState>() {
+                                                    let mut d = diag.0.lock().unwrap();
+                                                    d.stderr_tail.push(text.clone());
+                                                    if d.stderr_tail.len() > 50 {
+                                                        let _ = d.stderr_tail.drain(0..(d.stderr_tail.len() - 50));
+                                                    }
+                                                }
+
                                                 // Log errors at error level, others at info
-
-                                                let text = s.trim();
-
                                                 if text.contains("ERROR") || text.contains("error:") {
                                                     log::error!("[backend:err] {}", text);
-
                                                 } else {
                                                     log::info!("[backend:err] {}", text);
                                                 }
@@ -189,10 +227,24 @@ pub fn run() {
                                                     payload.code,
                                                     payload.signal
                                                 );
-                                                let _ = app_handle_clone.emit(
-                                                    "backend-terminated",
-                                                    (payload.code, payload.signal),
-                                                );
+
+                                                let snapshot = if let Some(diag) = app_handle_clone.try_state::<BackendDiagState>() {
+                                                    let mut d = diag.0.lock().unwrap();
+                                                    d.last_exit_code = payload.code;
+                                                    d.last_exit_signal = payload.signal;
+                                                    d.clone()
+                                                } else {
+                                                    BackendDiagnostics {
+                                                        ready_seen: false,
+                                                        last_exit_code: payload.code,
+                                                        last_exit_signal: payload.signal,
+                                                        last_spawn_error: None,
+                                                        stderr_tail: vec![],
+                                                    }
+                                                };
+
+                                                let _ = app_handle_clone.emit("backend-terminated", snapshot);
+                                                
                                                 // Optional restart: try once after short delay (let port release)
 
                                                 let app_handle_restart = app_handle_clone.clone();
@@ -222,6 +274,11 @@ pub fn run() {
                                                                             CommandEvent::Stdout(line) => {
                                                                                 let s = String::from_utf8_lossy(&line);
                                                                                 if s.contains("MEETING_BUDDY_READY") {
+                                                                                    if let Some(diag) = _app_handle_drain.try_state::<BackendDiagState>() {
+                                                                                        let mut d = diag.0.lock().unwrap();
+                                                                                        d.ready_seen = true;
+                                                                                        d.last_spawn_error = None;
+                                                                                    }
                                                                                     let _ = _app_handle_drain.emit("backend-ready", ());
                                                                                 }
                                                                                 log::info!("[backend] {}", s.trim());
@@ -229,7 +286,14 @@ pub fn run() {
 
                                                                             CommandEvent::Stderr(line) => {
                                                                                 let s = String::from_utf8_lossy(&line);
-                                                                                let text = s.trim();
+                                                                                let text = s.trim().to_string();
+                                                                                if let Some(diag) = _app_handle_drain.try_state::<BackendDiagState>() {
+                                                                                    let mut d = diag.0.lock().unwrap();
+                                                                                    d.stderr_tail.push(text.clone());
+                                                                                    if d.stderr_tail.len() > 50 {
+                                                                                        let _ = d.stderr_tail.drain(0..(d.stderr_tail.len() - 50));
+                                                                                    }
+                                                                                }
                                                                                 if text.contains("ERROR") || text.contains("error:") {
                                                                                     log::error!("[backend:err] {}", text);
                                                                                 } else {
@@ -243,10 +307,21 @@ pub fn run() {
                                                                                     payload.code,
                                                                                     payload.signal
                                                                                 );
-                                                                                let _ = _app_handle_drain.emit(
-                                                                                    "backend-terminated",
-                                                                                    (payload.code, payload.signal),
-                                                                                );
+                                                                                let snapshot = if let Some(diag) = _app_handle_drain.try_state::<BackendDiagState>() {
+                                                                                    let mut d = diag.0.lock().unwrap();
+                                                                                    d.last_exit_code = payload.code;
+                                                                                    d.last_exit_signal = payload.signal;
+                                                                                    d.clone()
+                                                                                } else {
+                                                                                    BackendDiagnostics {
+                                                                                        ready_seen: false,
+                                                                                        last_exit_code: payload.code,
+                                                                                        last_exit_signal: payload.signal,
+                                                                                        last_spawn_error: None,
+                                                                                        stderr_tail: vec![],
+                                                                                    }
+                                                                                };
+                                                                                let _ = _app_handle_drain.emit("backend-terminated", snapshot);
                                                                                 break;
                                                                             }
 
@@ -289,6 +364,16 @@ pub fn run() {
 
                                     log::error!("[meeting-buddy]   3. AudioCapture binary exists");
 
+                                    if let Some(diag) = app.try_state::<BackendDiagState>() {
+                                        let mut d = diag.0.lock().unwrap();
+                                        d.last_spawn_error = Some(format!("Failed to spawn backend sidecar: {e}"));
+                                    }
+
+                                    if let Some(diag) = app.try_state::<BackendDiagState>() {
+                                        let snapshot = diag.0.lock().unwrap().clone();
+                                        let _ = app_handle.emit("backend-terminated", snapshot);
+                                    }
+
                                     app.manage(BackendChild(Mutex::new(None)));
                                 }
                             }
@@ -309,6 +394,16 @@ pub fn run() {
                             log::error!("[meeting-buddy] This usually means the app bundle is incomplete.");
 
                             log::error!("[meeting-buddy] Rebuild with: cd ui && npm run tauri build");
+
+                            if let Some(diag) = app.try_state::<BackendDiagState>() {
+                                let mut d = diag.0.lock().unwrap();
+                                d.last_spawn_error = Some(format!("Backend sidecar binary not found: {e}"));
+                            }
+
+                            if let Some(diag) = app.try_state::<BackendDiagState>() {
+                                let snapshot = diag.0.lock().unwrap().clone();
+                                let _ = app_handle.emit("backend-terminated", snapshot);
+                            }
 
                             app.manage(BackendChild(Mutex::new(None)));
                         }
@@ -470,7 +565,7 @@ pub fn run() {
 
         .plugin(tauri_plugin_shell::init())
 
-        .invoke_handler(tauri::generate_handler![get_backend_url, check_screen_recording_permission, check_microphone_permission, dismiss_onboarding, open_system_settings_url])
+        .invoke_handler(tauri::generate_handler![get_backend_url, get_backend_diagnostics, check_screen_recording_permission, check_microphone_permission, dismiss_onboarding, open_system_settings_url])
 
         .build(tauri::generate_context!())
 
