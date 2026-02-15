@@ -35,10 +35,9 @@ echo "==> Installing to /Applications…"
 rm -rf "/Applications/$APP_NAME.app"
 cp -r "$BUNDLE" "/Applications/$APP_NAME.app"
 
-# Tell Launch Services about the new install so it doesn't confuse
-# the build-output copy with the /Applications copy.
-/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
-  -f "/Applications/$APP_NAME.app" 2>/dev/null || true
+# Remove the build-output copy so Launch Services doesn't see two apps
+# with the same bundle ID and create a duplicate Dock entry.
+rm -rf "$BUNDLE"
 
 echo "==> Launching…"
 open "/Applications/$APP_NAME.app"
