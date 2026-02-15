@@ -42,6 +42,9 @@ struct PermissionsView: View {
         .formStyle(.grouped)
         .navigationTitle("Permissions")
         .onAppear { checkPermissions() }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            checkPermissions()
+        }
     }
 
     private func checkPermissions() {
@@ -60,6 +63,7 @@ struct PermissionsView: View {
             HStack(spacing: 6) {
                 Image(systemName: granted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
                     .foregroundStyle(granted ? .green : .orange)
+                    .accessibilityLabel("\(title): \(granted ? "granted" : "not granted")")
                 Text(title)
                     .font(.headline)
             }
