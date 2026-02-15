@@ -71,13 +71,19 @@ fi
 echo "[sidecar] PROJECT_ROOT=${MEETINGBUDDY_PROJECT_ROOT:-<unset>} VENV=$VENV AUDIO_BINARY=$MEETINGBUDDY_AUDIO_BINARY" >&2
 
 # --- Port pre-check ---
-# If a healthy backend is already listening on 8765, exit immediately — don't evict it.
-# This is safe when Tauri starts the backend before spawning this sidecar, and the HUD's
-# BackendLauncher also tries to start a second instance.
+# If a *healthy* backend is already on 8765 (i.e. it has AudioCapture running), skip launch.
+# If a process is on 8765 but AudioCapture is absent, the backend is stale/broken — kill it
+# and fall through to start a fresh instance.
 EXISTING_PIDS=$(lsof -ti tcp:8765 2>/dev/null || true)
 if [ -n "$EXISTING_PIDS" ]; then
-    echo "[sidecar] Backend already running on port 8765 (pids: $EXISTING_PIDS) — skipping launch." >&2
-    exit 0
+    if pgrep -q AudioCapture 2>/dev/null; then
+        echo "[sidecar] Healthy backend on port 8765 with AudioCapture active — skipping launch." >&2
+        exit 0
+    else
+        echo "[sidecar] Stale backend on port 8765 (no AudioCapture) — killing and relaunching." >&2
+        kill $EXISTING_PIDS 2>/dev/null || true
+        sleep 1
+    fi
 fi
 
 exec python -m backend.main "$@"
