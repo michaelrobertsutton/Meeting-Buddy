@@ -262,6 +262,10 @@ class CommandsMixin:
     async def _cmd_start_login(self, params: dict) -> dict:
         if not self._token_manager:
             raise RuntimeError("OAuth not configured")
+        # Clean up any previous login attempt still holding the port
+        if self._login_server is not None:
+            await self._login_server._cleanup()
+            self._login_server = None
         from backend.auth.login_server import LoginServer
         self._login_server = LoginServer(self._token_manager)
         auth_url = await self._login_server.start_login()
