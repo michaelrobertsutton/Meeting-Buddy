@@ -996,5 +996,6 @@ class TranscriptWebSocket:
         # Always include Q&A history so new clients get full session context
         msg["qa_history"] = list(self._qa_history)
         msg["pinned"] = list(self._pinned_answers)
-        msg["listening"] = self._listening
+        # Be defensive: older tests/mocks may not include this attribute.
+        msg["listening"] = getattr(self, "_listening", True)
         return msg
