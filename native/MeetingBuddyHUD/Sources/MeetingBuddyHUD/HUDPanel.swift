@@ -2,16 +2,20 @@ import AppKit
 import SwiftUI
 
 /// Custom NSPanel for the HUD window with proper floating behavior.
-/// Uses a standard title bar (no fullSizeContentView) so traffic lights are never clipped
-/// and the content view is strictly below the title bar (no blank/overlap issues).
+/// Uses a standard visible title bar so macOS traffic lights render in their normal
+/// position. The content view starts strictly below the title bar, so the window
+/// chrome provides the rounded corners — no custom clipShape is needed on the SwiftUI
+/// side and there is no double-corner artefact.
 final class HUDPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: AppTheme.windowWidth, height: AppTheme.windowHeight),
-            styleMask: [.nonactivatingPanel, .titled, .closable, .resizable, .fullSizeContentView],
+            styleMask: [.nonactivatingPanel, .titled, .closable, .resizable],
             backing: .buffered,
             defer: false
         )
+
+        title = "Meeting Buddy"
 
         // Floating panel behavior
         level = .floating
@@ -19,15 +23,9 @@ final class HUDPanel: NSPanel {
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
 
-        // Transparent titlebar so SwiftUI content fills the full window;
-        // the root ZStack clipShape is the sole rounded-corner provider (no double-corner).
-        titlebarAppearsTransparent = true
-        titleVisibility = .hidden
-
-        // Hide traffic lights — close/minimise/zoom are managed via toolbar chevron + hotkeys
-        standardWindowButton(.closeButton)?.isHidden = true
-        standardWindowButton(.miniaturizeButton)?.isHidden = true
-        standardWindowButton(.zoomButton)?.isHidden = true
+        // Standard title bar: traffic lights in their natural position, content below.
+        titlebarAppearsTransparent = false
+        titleVisibility = .visible
 
         minSize = NSSize(width: 340, height: 400)
 
@@ -72,17 +70,11 @@ final class HUDPanelController {
 
         let rootView = AnyView(
             ZStack {
-                // Background material
+                // Background material — fills the content view; window chrome clips corners
                 VisualEffectView(material: .hudWindow, blendingMode: .behindWindow)
 
-                // Content (content view is strictly below title bar; no overlap)
                 content()
             }
-            .clipShape(RoundedRectangle(cornerRadius: AppTheme.cornerRadius))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppTheme.cornerRadius)
-                    .strokeBorder(AppTheme.glassEdge, lineWidth: 0.5)
-            )
         )
 
         if hostingView == nil {
