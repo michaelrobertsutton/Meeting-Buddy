@@ -21,7 +21,7 @@ struct TranscriptView: View {
                                 .foregroundStyle(Color.white.opacity(opacityForIndex(idx, total: segments.count)))
                                 .id(idx)
                         }
-                        .padding(.horizontal, AppTheme.margin)
+                        // Horizontal padding comes from parent ContentView (AppTheme.margin = 16pt)
 
                         // Anchor for autoscroll
                         Color.clear
@@ -62,7 +62,6 @@ struct TranscriptView: View {
                             .font(.caption)
                             .foregroundStyle(AppTheme.textSecondary)
                     }
-                    .padding(.horizontal, AppTheme.margin)
                     .padding(.top, 12)
                     .onAppear { listeningPulse = true }
                     .onChange(of: isIdle) { idle in
