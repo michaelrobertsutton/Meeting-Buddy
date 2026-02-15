@@ -86,9 +86,7 @@ struct TranscriptView: View {
     private func opacityForIndex(_ index: Int, total: Int) -> Double {
         guard total > 0 else { return 1.0 }
         let latest = total - 1
-        if index == latest { return 1.0 }
-        if index == latest - 1 { return 0.75 }
-        if index == latest - 2 { return 0.55 }
-        return 0.40
+        if index == latest { return 1.0 }   // Current line: 100% white
+        return 0.30                          // Previous lines: 30% (secondary white) for focus
     }
 }
