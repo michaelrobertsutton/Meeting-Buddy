@@ -35,6 +35,7 @@ struct HUDStatusBarView: View {
             // Processed locally badge
             Label("Processed Locally", systemImage: "lock.fill")
                 .font(.caption2)
+                .imageScale(.small)
                 .foregroundStyle(AppTheme.textSecondary)
                 .padding(.vertical, 4)
                 .padding(.horizontal, 8)
@@ -44,9 +45,9 @@ struct HUDStatusBarView: View {
 
             // Connection status
             HStack(spacing: 6) {
-                Circle()
-                    .fill(connectionDotColor)
-                    .frame(width: 6, height: 6)
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 6))
+                    .foregroundStyle(connectionDotColor)
                     .scaleEffect(connectionState == .connecting && pulse ? 1.35 : 1.0)
                     .opacity(connectionState == .connecting && pulse ? 0.55 : 1.0)
                     .animation(
@@ -55,6 +56,7 @@ struct HUDStatusBarView: View {
                         : .default,
                         value: pulse
                     )
+                    .imageScale(.small)
 
                 Text(connectionLabel)
                     .font(.caption2)
@@ -81,6 +83,7 @@ struct HUDStatusBarView: View {
             if isPinned {
                 Label("Pinned", systemImage: "pin.fill")
                     .font(.caption2)
+                    .imageScale(.small)
                     .foregroundStyle(AppTheme.accentBlue)
                     .transition(.opacity)
             } else {
@@ -89,6 +92,7 @@ struct HUDStatusBarView: View {
             }
         }
         .padding(.horizontal, 16)
+        .padding(.bottom, 16)
         .frame(height: 28)
         .background(Color.black.opacity(0.15))
     }
