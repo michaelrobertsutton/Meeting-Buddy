@@ -13,7 +13,9 @@ if [ -z "${MEETINGBUDDY_PROJECT_ROOT:-}" ]; then
             break
         fi
         NEXT="$(cd "$WALK/.." && pwd)"
+        # Stop at filesystem root (/ or // on macOS — both are terminal)
         [ "$NEXT" = "$WALK" ] && break
+        [ "$WALK" = "/" ] || [ "$WALK" = "//" ] && break
         WALK="$NEXT"
     done
 fi
