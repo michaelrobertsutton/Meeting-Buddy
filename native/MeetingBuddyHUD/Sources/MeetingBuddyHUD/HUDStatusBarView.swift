@@ -33,7 +33,7 @@ struct HUDStatusBarView: View {
     }
 
     var body: some View {
-        HStack(spacing: 10) {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
             // Processed locally badge
             Label("Processed Locally", systemImage: "lock.fill")
                 .font(.caption2)
@@ -46,8 +46,8 @@ struct HUDStatusBarView: View {
                 )
 
             // Connection status and feedback
-            HStack(spacing: 8) {
-                HStack(spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
                     Image(systemName: "circle.fill")
                         .font(.system(size: 6))
                         .foregroundStyle(connectionDotColor)
@@ -60,6 +60,7 @@ struct HUDStatusBarView: View {
                             value: pulse
                         )
                         .imageScale(.small)
+                        .alignmentGuide(.firstTextBaseline) { d in d[VerticalAlignment.center] }
 
                     Text(connectionLabel)
                         .font(.caption2)
