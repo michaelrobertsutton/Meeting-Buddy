@@ -561,26 +561,11 @@ function togglePin() {
 
 // --- Settings Panel ---
 async function openSettingsWindow() {
-    // Prefer the separate Settings window (Phase UI). Fall back to the drawer.
     try {
-        const { WebviewWindow } = window.__TAURI__.webviewWindow;
-        // Close any existing settings window so it reloads fresh.
-        const existing = WebviewWindow.getByLabel('settings');
-        if (existing) {
-            await existing.close();
-        }
-        const w = new WebviewWindow('settings', {
-            url: 'settings.html',
-            title: 'Meeting Buddy Settings',
-            width: 860,
-            height: 600,
-            transparent: true,
-        });
-        await w.show();
-        await w.setFocus();
-        return;
+        const { invoke } = window.__TAURI__.core;
+        await invoke('open_settings_window');
     } catch (err) {
-        console.debug('[Settings] Falling back to drawer:', err.message);
+        console.error('[Settings] Failed to open settings window:', err);
         toggleSettings();
     }
 }
