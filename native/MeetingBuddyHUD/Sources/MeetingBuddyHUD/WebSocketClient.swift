@@ -41,6 +41,9 @@ final class WebSocketClient: ObservableObject {
     @Published var availableProjects: [String] = []
     @Published var activeProject: String = ""
 
+    // Q&A history
+    @Published var qaHistory: [QAEntry] = []
+
     // Pins
     @Published var pinned: [PinnedAnswer] = []
 
@@ -227,6 +230,10 @@ final class WebSocketClient: ObservableObject {
                 if let pinned = msg.pinned {
                     self.pinned = pinned
                     self.isPinned = !pinned.isEmpty
+                }
+
+                if let history = msg.qa_history {
+                    self.qaHistory = history
                 }
             }
             return

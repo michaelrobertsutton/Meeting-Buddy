@@ -6,6 +6,7 @@ import MeetingBuddyProtocol
 struct TranscriptView: View {
     let segments: [TranscriptSegment]
     let lastSegmentAt: Date?
+    var onTapSegment: ((String) -> Void)? = nil
 
     @State private var now: Date = Date()
     @State private var listeningPulse: Bool = false
@@ -20,6 +21,10 @@ struct TranscriptView: View {
                                 .font(.body)
                                 .foregroundStyle(Color.white.opacity(opacityForIndex(idx, total: segments.count)))
                                 .id(idx)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    onTapSegment?(seg.text)
+                                }
                         }
                         // Horizontal padding comes from parent ContentView (AppTheme.margin = 16pt)
 

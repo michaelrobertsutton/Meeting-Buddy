@@ -13,8 +13,10 @@ struct ContentView: View {
 
             // Main content area — single continuous material (no inner rounded box; avoids double-corner/notch)
             VStack(spacing: AppTheme.spacing) {
-                // Transcript section
-                TranscriptView(segments: ws.segments, lastSegmentAt: ws.lastTranscriptAt)
+                // Transcript section — tap a segment to set it as the active question
+                TranscriptView(segments: ws.segments, lastSegmentAt: ws.lastTranscriptAt) { text in
+                    Task { await ws.setQuestion(text) }
+                }
 
                 // Synthesis card (when active)
                 if ws.synthesisSearching || !ws.answerPartialText.isEmpty || ws.activeAnswer != nil || ws.synthesisError != nil {
@@ -27,12 +29,19 @@ struct ContentView: View {
                     )
                     .transition(.asymmetric(insertion: .move(edge: .top).combined(with: .opacity), removal: .opacity))
                 }
+
+                // Q&A history (when at least one answer has accumulated)
+                if !ws.qaHistory.isEmpty {
+                    QAHistoryView(ws: ws)
+                        .transition(.opacity)
+                }
             }
             .padding(AppTheme.margin)
             .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.synthesisSearching)
             .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.answerPartialText)
             .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.activeAnswer?.one_liner ?? "")
             .animation(.spring(response: 0.4, dampingFraction: 0.7), value: ws.synthesisError ?? "")
+            .animation(.easeInOut(duration: 0.25), value: ws.qaHistory.count)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
 
             Spacer(minLength: 0)

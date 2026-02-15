@@ -18,6 +18,14 @@ struct SynthesisCardView: View {
                 .kerning(0.5)
                 .foregroundStyle(AppTheme.accentBlue)
 
+            if !question.isEmpty {
+                Text(question)
+                    .font(.caption)
+                    .foregroundStyle(AppTheme.textSecondary)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
             if searching {
                 HStack(spacing: 8) {
                     ProgressView()
