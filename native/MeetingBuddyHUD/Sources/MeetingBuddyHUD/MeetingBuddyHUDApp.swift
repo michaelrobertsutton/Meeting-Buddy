@@ -40,6 +40,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Hide dock icon (menu bar app / accessory)
         NSApp.setActivationPolicy(.accessory)
 
+        // Best-effort backend launch (no-op if backend already running or sidecar not found)
+        BackendLauncher.launchIfAvailable()
+
         // Connect to backend
         ws.connect()
 
