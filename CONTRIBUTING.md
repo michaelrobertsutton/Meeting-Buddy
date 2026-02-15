@@ -136,3 +136,12 @@ If you are an AI agent:
 - follow the Workflow Orchestration guidelines in [CLAUDE.md](CLAUDE.md)
 - after any correction: record the pattern in `tasks/lessons.md`
 
+**No exceptions for "small" or "quick" fixes.** Even a one-line change must go through a branch + PR. The sequence is always:
+1. Create (or identify) a GitHub issue
+2. `git checkout -b fix/<N>-slug`
+3. Make changes, commit, push
+4. `gh pr create` — reference and close the issue
+5. Move issue label to `status:review`
+
+Direct commits to `main` are never acceptable.
+
