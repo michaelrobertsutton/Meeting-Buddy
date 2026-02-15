@@ -45,7 +45,6 @@ struct DocumentsView: View {
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
-                    .width(min: 300)
                     TableColumn("Type") { doc in
                         Text(doc.fileType)
                             .foregroundStyle(.secondary)
@@ -53,6 +52,7 @@ struct DocumentsView: View {
                     .width(80)
                     TableColumn("Size") { doc in
                         Text(doc.sizeLabel)
+                            .monospacedDigit()
                             .foregroundStyle(.secondary)
                     }
                     .width(80)
@@ -65,7 +65,7 @@ struct DocumentsView: View {
                         Text((doc.priority ?? "normal").capitalized)
                             .foregroundStyle(.secondary)
                     }
-                    .width(120)
+                    .width(100)
                 }
                 .contextMenu {
                     if let single = selection.first {
