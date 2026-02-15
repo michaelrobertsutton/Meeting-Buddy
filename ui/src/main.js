@@ -246,8 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
         clearSession();
     });
     
-    // backend-terminated handling lives in the backend lifecycle listener below (to avoid duplicates)
-
     // Onboarding actions
     function showOnboarding() {
         if (!dom.onboarding) {

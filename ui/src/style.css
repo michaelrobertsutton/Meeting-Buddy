@@ -898,6 +898,7 @@ body.pinned #drag-handle {
     margin-top: 6px;
     font-size: 11px;
     color: var(--mb-text-tertiary);
+    white-space: pre-wrap;
 }
 
 .settings-hint code {
