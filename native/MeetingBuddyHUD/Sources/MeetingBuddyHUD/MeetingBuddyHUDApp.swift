@@ -11,6 +11,12 @@ extension Notification.Name {
 struct MeetingBuddyHUDApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    init() {
+        // Suppress dock icon before the app finishes launching — setting this in
+        // applicationDidFinishLaunching is too late and causes a bounce.
+        NSApplication.shared.setActivationPolicy(.accessory)
+    }
+
     var body: some Scene {
         // No visible window from SwiftUI — NSPanel is managed by AppDelegate
         Settings {
