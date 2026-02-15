@@ -27,6 +27,7 @@ This checklist is meant to keep releases boring. Run it before cutting a new bui
 Verify the bundle includes:
 - [ ] `meeting-buddy-backend` (Python backend sidecar script)
 - [ ] `AudioCapture` (Swift ScreenCaptureKit helper)
+- [ ] `MeetingBuddyHUD` (native HUD overlay executable)
 - [ ] `MeetingBuddySettings` (native settings executable)
 
 ## 4) Permissions (most common failure mode)

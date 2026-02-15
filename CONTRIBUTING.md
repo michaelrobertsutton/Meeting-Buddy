@@ -136,15 +136,3 @@ If you are an AI agent:
 - follow the Workflow Orchestration guidelines in [CLAUDE.md](CLAUDE.md)
 - after any correction: record the pattern in `tasks/lessons.md`
 
-## When to add ci:run
-
-Add the `ci:run` label when at least one is true:
-- You touched Tauri/Rust/Swift packaging or process-spawning logic and want a clean end-to-end sanity check.
-- You changed the WebSocket protocol or cross-component contracts (backend ↔ native ↔ UI).
-- You're ready for review/merge and want CI as a final verification gate.
-
-Do **NOT** add `ci:run` when:
-- You're still iterating quickly on small changes (run local checks instead).
-- The change is docs-only or a trivial refactor with no behavior change (unless a reviewer requests).
-
-Manual runs: maintainers can also trigger CI via the Actions "Run workflow" button (`workflow_dispatch`) without adding the label.
