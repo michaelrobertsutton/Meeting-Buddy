@@ -1304,16 +1304,6 @@ function handleMessage(msg) {
         return;
     }
 
-    // Audio health warnings
-    if (msg.type === 'audio_warning') {
-        showAudioBanner(msg.message, 'warning');
-        return;
-    }
-    if (msg.type === 'audio_error') {
-        showAudioBanner(msg.message, 'error');
-        return;
-    }
-
     if (msg.version <= state.version && msg.type !== 'snapshot') {
         return;
     }
@@ -1322,7 +1312,6 @@ function handleMessage(msg) {
     state.segments = msg.segments || [];
     if (state.segments.length > 0) {
         state.lastTranscriptAtMs = Date.now();
-        clearAudioBanner();
     }
 
     // Update question history
@@ -1409,40 +1398,6 @@ function _splitSentences(text) {
         .split(/(?<=[.!?])\s+/)
         .map((s) => s.trim())
         .filter(Boolean);
-}
-
-let _audioBannerTimeout = null;
-
-function showAudioBanner(message, level) {
-    // level: 'warning' or 'error'
-    clearAudioBanner();
-    const banner = document.createElement('div');
-    banner.id = 'audio-banner';
-    banner.className = level === 'error' ? 'audio-error-banner' : 'audio-warning-banner';
-    banner.textContent = message;
-    const dismiss = document.createElement('button');
-    dismiss.className = 'audio-banner-dismiss';
-    dismiss.textContent = '\u00d7';
-    dismiss.addEventListener('click', clearAudioBanner);
-    banner.appendChild(dismiss);
-    // Insert before transcript scroll area
-    const scroll = dom.transcriptScroll;
-    if (scroll && scroll.parentNode) {
-        scroll.parentNode.insertBefore(banner, scroll);
-    }
-    // Auto-dismiss after 15 seconds for warnings; keep errors until dismissed
-    if (level === 'warning') {
-        _audioBannerTimeout = setTimeout(clearAudioBanner, 15000);
-    }
-}
-
-function clearAudioBanner() {
-    if (_audioBannerTimeout) {
-        clearTimeout(_audioBannerTimeout);
-        _audioBannerTimeout = null;
-    }
-    const banner = document.getElementById('audio-banner');
-    if (banner) banner.remove();
 }
 
 function renderTranscript() {
