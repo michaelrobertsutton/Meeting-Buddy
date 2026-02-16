@@ -12,6 +12,10 @@ struct SettingsChild(Mutex<Option<CommandChild>>);
 /// Holds the native HUD sidecar child process so we can kill it to hide.
 struct HudChild(Mutex<Option<CommandChild>>);
 
+/// Flag set to `true` before intentionally killing the HUD (toggle/hide/quit).
+/// The death-watch task checks this: if set, clears it and does NOT quit Tauri.
+struct HudIntentionalKill(Mutex<bool>);
+
 /// Holds the backend sidecar child process so we can kill it on app exit.
 struct BackendChild(Mutex<Option<CommandChild>>);
 
@@ -32,53 +36,35 @@ fn get_backend_diagnostics(state: tauri::State<'_, BackendDiagState>) -> Backend
     state.0.lock().unwrap().clone()
 }
 
-/// Kill any existing sidecar in `state`, then spawn `name` and store the child.
-/// Returns Ok(()) on success, Err with message on failure.
-fn spawn_sidecar(
-    app: &tauri::AppHandle,
-    name: &str,
-    state: &Mutex<Option<CommandChild>>,
-) -> Result<(), String> {
-    if let Some(old) = state.lock().unwrap().take() {
-        let _ = old.kill();
-        // Intentionally avoid sleeping here: this function may be called from UI event handlers.
-        // If we need a delay to avoid races, handle it asynchronously at the call site.
-    }
-    match app.shell().sidecar(name) {
-        Ok(cmd) => match cmd.spawn() {
-            Ok((_rx, child)) => {
-                *state.lock().unwrap() = Some(child);
-                Ok(())
-            }
-            Err(e) => Err(format!("Failed to spawn {name}: {e}")),
-        },
-        Err(e) => Err(format!("Sidecar {name} not found: {e}")),
-    }
-}
 
-/// Spawn a sidecar if it's not already running.
-///
-/// Used for Settings to avoid repeatedly launching additional instances.
-fn ensure_sidecar_running(
-    app: &tauri::AppHandle,
-    name: &str,
-    state: &Mutex<Option<CommandChild>>,
-) -> Result<(), String> {
-    if state.lock().unwrap().is_some() {
-        // Best-effort: if it's already running, do nothing.
-        // (No reliable "focus" API for raw sidecar executables.)
-        return Ok(());
-    }
-
-    match app.shell().sidecar(name) {
+/// Spawn the MeetingBuddyHUD sidecar and attach a death-watch task.
+/// If the HUD exits without the intentional-kill flag being set, Tauri exits too.
+fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
+    match app.shell().sidecar("MeetingBuddyHUD") {
         Ok(cmd) => match cmd.spawn() {
-            Ok((_rx, child)) => {
-                *state.lock().unwrap() = Some(child);
-                Ok(())
+            Ok((mut rx, child)) => {
+                if let Some(state) = app.try_state::<HudChild>() {
+                    *state.0.lock().unwrap() = Some(child);
+                }
+                let h = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    use tauri_plugin_shell::process::CommandEvent;
+                    while let Some(ev) = rx.recv().await {
+                        if let CommandEvent::Terminated(_) = ev {
+                            if let Some(flag) = h.try_state::<HudIntentionalKill>() {
+                                let mut f = flag.0.lock().unwrap();
+                                if *f { *f = false; break; }
+                            }
+                            log::info!("[hud] HUD exited by user — quitting Tauri");
+                            h.exit(0);
+                            break;
+                        }
+                    }
+                });
             }
-            Err(e) => Err(format!("Failed to spawn {name}: {e}")),
+            Err(e) => log::error!("[hud] spawn: {e}"),
         },
-        Err(e) => Err(format!("Sidecar {name} not found: {e}")),
+        Err(e) => log::error!("[hud] sidecar not found: {e}"),
     }
 }
 
@@ -465,14 +451,10 @@ pub fn run() {
 
             app.manage(HudChild(Mutex::new(None)));
 
-            // Spawn native HUD sidecar on startup (best-effort)
-            let app_handle = app.handle();
-            if let Some(state) = app_handle.try_state::<HudChild>() {
-                #[allow(clippy::needless_borrow)]
-                if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
-                    log::error!("[hud] {e}");
-                }
-            }
+            app.manage(HudIntentionalKill(Mutex::new(false)));
+
+            // Spawn native HUD sidecar on startup with death-watch.
+            spawn_hud_with_deathwatch(app.handle());
 
             #[cfg(desktop)]
             {
@@ -496,18 +478,15 @@ pub fn run() {
                             }
 
                             if shortcut == &toggle_shortcut {
-                                // Alt+Space always brings HUD to front: kill any existing
-                                // instance (buried or visible) and spawn fresh so the new
-                                // window calls makeKeyAndOrderFront and appears on top.
+                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
+                                    *flag.0.lock().unwrap() = true;
+                                }
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
                                     if let Some(old_child) = state.0.lock().unwrap().take() {
                                         let _ = old_child.kill();
                                     }
-                                    #[allow(clippy::needless_borrow)]
-                                    if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
-                                        log::error!("[hud] {e}");
-                                    }
                                 }
+                                spawn_hud_with_deathwatch(&app_handle);
                             } else if shortcut == &focus_shortcut {
                                 // Cmd+K: focus the question input in all webview windows
                                 for window in app_handle.webview_windows().values() {
@@ -561,16 +540,15 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
-                                // Same as Alt+Space: kill-and-respawn to bring to front.
+                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
+                                    *flag.0.lock().unwrap() = true;
+                                }
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
                                     if let Some(old_child) = state.0.lock().unwrap().take() {
                                         let _ = old_child.kill();
                                     }
-                                    #[allow(clippy::needless_borrow)]
-                                    if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
-                                        log::error!("[hud] {e}");
-                                    }
                                 }
+                                spawn_hud_with_deathwatch(&app_handle);
                             }
                             "open_settings" => {
                                 if let Err(e) = open_settings_window(app_handle.clone()) {
@@ -579,6 +557,9 @@ pub fn run() {
                             }
 
                             "hide_hud" => {
+                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
+                                    *flag.0.lock().unwrap() = true;
+                                }
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
                                     if let Some(child) = state.0.lock().unwrap().take() {
                                         let _ = child.kill();
@@ -593,6 +574,9 @@ pub fn run() {
                             }
 
                             "quit" => {
+                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
+                                    *flag.0.lock().unwrap() = true;
+                                }
                                 app_handle.exit(0);
                             }
 
@@ -619,34 +603,6 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
-        // Dock icon clicked: send SIGUSR1 to the running HUD so it raises its window
-        // without kill+respawn (which flashes/recreates the window on every click).
-        // Fall back to spawning fresh if the pid file is missing or stale.
-        if let tauri::RunEvent::Reopen { .. } = event {
-            let pid_file = "/tmp/meetingbuddy-hud.pid";
-            let signalled = std::fs::read_to_string(pid_file)
-                .ok()
-                .and_then(|s| s.trim().parse::<u32>().ok())
-                .map(|pid| {
-                    std::process::Command::new("kill")
-                        .args(["-USR1", &pid.to_string()])
-                        .status()
-                        .map(|s| s.success())
-                        .unwrap_or(false)
-                })
-                .unwrap_or(false);
-
-            if !signalled {
-                // HUD not running — spawn fresh.
-                if let Some(state) = app_handle.try_state::<HudChild>() {
-                    #[allow(clippy::needless_borrow)]
-                    if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
-                        log::error!("[hud] reopen spawn: {e}");
-                    }
-                }
-            }
-        }
-
         if let tauri::RunEvent::Exit = event {
             // Kill the backend sidecar on app exit and wait briefly so it can release the port
 
