@@ -226,11 +226,22 @@ final class WebSocketClient: ObservableObject {
                         if let total = msg.timings?.total_ms {
                             self.lastTotalMs = total
                         }
+                    case "audio_warning":
+                        self.lastError = msg.message ?? "No audio detected — check System Settings › Privacy › Screen & System Audio Recording."
+                    case "audio_error":
+                        self.lastError = msg.message ?? "Audio capture stopped — grant Screen Recording permission and restart."
                     case "pinned_update":
                         break
                     default:
                         break
                     }
+                }
+
+                // Clear audio warning once real transcript data arrives (audio is working)
+                if let segs = msg.segments, !segs.isEmpty,
+                   let err = self.lastError,
+                   err.contains("audio") || err.contains("Audio") || err.contains("Screen Recording") {
+                    self.lastError = nil
                 }
 
                 if let listening = msg.listening { self.isListening = listening }
