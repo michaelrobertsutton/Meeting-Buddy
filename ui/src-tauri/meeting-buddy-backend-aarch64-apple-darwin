@@ -74,9 +74,14 @@ echo "[sidecar] PROJECT_ROOT=${MEETINGBUDDY_PROJECT_ROOT:-<unset>} VENV=$VENV AU
 # If a *healthy* backend is already on 8765 (i.e. it has AudioCapture running), skip launch.
 # If a process is on 8765 but AudioCapture is absent, the backend is stale/broken — kill it
 # and fall through to start a fresh instance.
+FORCE_RESTART="${MEETINGBUDDY_FORCE_RESTART:-0}"
 EXISTING_PIDS=$(lsof -ti tcp:8765 2>/dev/null || true)
 if [ -n "$EXISTING_PIDS" ]; then
-    if pgrep -q AudioCapture 2>/dev/null; then
+    if [ "$FORCE_RESTART" = "1" ]; then
+        echo "[sidecar] Forced restart requested — killing existing backend on port 8765." >&2
+        kill $EXISTING_PIDS 2>/dev/null || true
+        sleep 1
+    elif pgrep -q AudioCapture 2>/dev/null; then
         echo "[sidecar] Healthy backend on port 8765 with AudioCapture active — skipping launch." >&2
         exit 0
     else

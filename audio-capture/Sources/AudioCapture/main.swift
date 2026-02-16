@@ -77,7 +77,7 @@ final class SCStreamRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         // the permission has not yet been approved.
         guard CGPreflightScreenCaptureAccess() else {
             log("[AudioCapture] ERROR: Screen Recording permission not granted.")
-            log("[AudioCapture] Open System Settings > Privacy & Security > Screen & System Audio Recording and enable Meeting Buddy.")
+            log("[AudioCapture] Open System Settings > Privacy & Security > Screen & System Audio Recording and enable Meeting Buddy (or Terminal/iTerm when running from the command line).")
             exit(1)
         }
 
@@ -234,14 +234,10 @@ final class SCStreamRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
 
         // blockBuffer is +1 retained — ARC releases when it goes out of scope
 
-        // Build source AVAudioFormat from ASBD
-        let isInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
-        guard let srcFmt = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: asbd.mSampleRate,
-            channels: AVAudioChannelCount(asbd.mChannelsPerFrame),
-            interleaved: isInterleaved
-        ) else {
+        // Build source AVAudioFormat from the exact callback ASBD.
+        // Do not force Float32: some systems provide different PCM layouts.
+        var mutableASBD = asbd
+        guard let srcFmt = AVAudioFormat(streamDescription: &mutableASBD) else {
             OSAtomicIncrement64(&emptyCallbackCount)
             return
         }
@@ -316,19 +312,16 @@ final class SCStreamRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     // ---------------------------------------------------------------------------
 
     private func initConverter(asbd: AudioStreamBasicDescription) {
-        let isInterleaved = (asbd.mFormatFlags & kAudioFormatFlagIsNonInterleaved) == 0
-        log("[AudioCapture] source format: \(asbd.mSampleRate) Hz, \(asbd.mChannelsPerFrame) ch, "
-            + "interleaved=\(isInterleaved)")
-
-        guard let srcFmt = AVAudioFormat(
-            commonFormat: .pcmFormatFloat32,
-            sampleRate: asbd.mSampleRate,
-            channels: AVAudioChannelCount(asbd.mChannelsPerFrame),
-            interleaved: isInterleaved
-        ) else {
+        var mutableASBD = asbd
+        guard let srcFmt = AVAudioFormat(streamDescription: &mutableASBD) else {
             log("[AudioCapture] ERROR: failed to create source AVAudioFormat")
             return
         }
+        log(
+            "[AudioCapture] source format: \(srcFmt.sampleRate) Hz, \(srcFmt.channelCount) ch, "
+            + "commonFormat=\(srcFmt.commonFormat.rawValue), interleaved=\(srcFmt.isInterleaved), "
+            + "formatFlags=0x\(String(mutableASBD.mFormatFlags, radix: 16))"
+        )
 
         guard let tgtFmt = AVAudioFormat(
             commonFormat: .pcmFormatInt16,
@@ -349,7 +342,7 @@ final class SCStreamRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
         self.outputFormat = tgtFmt
 
         log("[AudioCapture] converter ready: "
-            + "\(srcFmt.sampleRate) Hz \(srcFmt.channelCount)ch Float32 "
+            + "\(srcFmt.sampleRate) Hz \(srcFmt.channelCount)ch \(srcFmt.commonFormat.rawValue) "
             + "-> \(tgtFmt.sampleRate) Hz \(tgtFmt.channelCount)ch Int16")
     }
 }

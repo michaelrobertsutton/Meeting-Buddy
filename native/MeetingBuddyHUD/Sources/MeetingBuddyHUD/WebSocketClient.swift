@@ -63,6 +63,9 @@ final class WebSocketClient: ObservableObject {
     private var reconnectWorkItem: DispatchWorkItem?
 
     private var backendLaunchAttempted: Bool = false
+    private var audioStatusPollTask: Task<Void, Never>?
+    private var connectedAt: Date?
+    private var audioRecoveryAttempted: Bool = false
 
     init(url: URL = URL(string: "ws://localhost:8765")!) {
         self.url = url
@@ -78,10 +81,14 @@ final class WebSocketClient: ObservableObject {
         let task = session.webSocketTask(with: url)
         self.task = task
         task.resume()
+        audioStatusPollTask?.cancel()
+        audioStatusPollTask = nil
 
         DispatchQueue.main.async {
             self.connectionState = .connecting
             self.lastError = nil
+            self.connectedAt = nil
+            self.audioRecoveryAttempted = false
         }
 
         receiveLoop()
@@ -93,9 +100,12 @@ final class WebSocketClient: ObservableObject {
 
         task?.cancel(with: .goingAway, reason: nil)
         task = nil
+        audioStatusPollTask?.cancel()
+        audioStatusPollTask = nil
 
         DispatchQueue.main.async {
             self.connectionState = .disconnected
+            self.connectedAt = nil
         }
     }
 
@@ -123,9 +133,12 @@ final class WebSocketClient: ObservableObject {
             guard let self else { return }
             switch result {
             case .failure(let err):
+                self.audioStatusPollTask?.cancel()
+                self.audioStatusPollTask = nil
                 DispatchQueue.main.async {
                     self.connectionState = .disconnected
                     self.lastError = err.localizedDescription
+                    self.connectedAt = nil
                 }
 
                 // If HUD is launched without the Tauri process manager, nothing may be
@@ -142,6 +155,9 @@ final class WebSocketClient: ObservableObject {
                     if self.connectionState != .connected {
                         self.connectionState = .connected
                         self.reconnectAttempt = 0
+                        self.connectedAt = Date()
+                        self.audioRecoveryAttempted = false
+                        self.startAudioStatusPolling()
                         Task { await self.bootstrapSettings() }
                     }
                 }
@@ -157,6 +173,71 @@ final class WebSocketClient: ObservableObject {
                     break
                 }
                 self.receiveLoop()
+            }
+        }
+    }
+
+    private func startAudioStatusPolling() {
+        guard audioStatusPollTask == nil else { return }
+
+        audioStatusPollTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                guard let self else { return }
+                await self.pollAudioStatus()
+            }
+        }
+    }
+
+    private static func decodeAudioStatus(from raw: Any) -> AudioStatus? {
+        guard let dict = raw as? [String: Any],
+              JSONSerialization.isValidJSONObject(dict),
+              let data = try? JSONSerialization.data(withJSONObject: dict) else {
+            return nil
+        }
+        return try? JSONDecoder().decode(AudioStatus.self, from: data)
+    }
+
+    @MainActor
+    private func maybeTriggerAudioRecovery(reason: String) {
+        guard connectionState == .connected else { return }
+        guard !audioRecoveryAttempted else { return }
+        let elapsed = Date().timeIntervalSince(connectedAt ?? Date())
+        guard elapsed >= 8 else { return }
+
+        audioRecoveryAttempted = true
+        audioWarning = "Recovering audio capture… restarting backend."
+        BackendLauncher.launchIfAvailable(forceRestart: true)
+    }
+
+    private func pollAudioStatus() async {
+        guard task != nil else { return }
+
+        do {
+            let data = try await sendCommand("get_audio_status")
+            if let raw = data["audio_status"],
+               let status = Self.decodeAudioStatus(from: raw) {
+                await MainActor.run {
+                    self.audioStatus = status
+                }
+
+                if !status.running {
+                    await MainActor.run {
+                        self.maybeTriggerAudioRecovery(reason: "Audio capture process is not running.")
+                    }
+                } else if status.frames_received == 0 {
+                    await MainActor.run {
+                        self.maybeTriggerAudioRecovery(reason: "No audio frames received yet from capture.")
+                    }
+                }
+            } else {
+                await MainActor.run {
+                    self.maybeTriggerAudioRecovery(reason: "Backend did not provide audio status.")
+                }
+            }
+        } catch {
+            await MainActor.run {
+                self.maybeTriggerAudioRecovery(reason: "Audio status check failed: \(error.localizedDescription)")
             }
         }
     }

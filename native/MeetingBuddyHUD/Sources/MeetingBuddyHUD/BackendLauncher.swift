@@ -4,13 +4,18 @@ enum BackendLauncher {
 
     /// Best-effort backend launcher for cases where the native HUD/Settings is started
     /// without the Tauri process manager.
-    static func launchIfAvailable() {
+    static func launchIfAvailable(forceRestart: Bool = false) {
         guard let url = findBackendSidecar() else { return }
 
         let proc = Process()
         proc.executableURL = url
         proc.standardOutput = FileHandle.nullDevice
         proc.standardError = FileHandle.nullDevice
+        if forceRestart {
+            var env = ProcessInfo.processInfo.environment
+            env["MEETINGBUDDY_FORCE_RESTART"] = "1"
+            proc.environment = env
+        }
         do {
             try proc.run()
         } catch {
