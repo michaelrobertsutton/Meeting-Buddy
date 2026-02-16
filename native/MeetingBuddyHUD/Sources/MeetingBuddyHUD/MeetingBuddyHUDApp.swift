@@ -139,7 +139,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func handleSettingsHotkey(_ event: NSEvent) {
-        _ = handleKeyDown(event)
+        // Global monitor fires when another app is active — only handle Cmd+,
+        // (open settings). Never handle Cmd+H here: that would hide the HUD
+        // every time the user presses Cmd+H in Safari, Finder, etc.
+        guard event.modifierFlags.contains(.command),
+              let chars = event.charactersIgnoringModifiers,
+              chars == "," else { return }
+        DispatchQueue.main.async {
+            try? SettingsLauncher.launch()
+        }
     }
 
     private func toggleHUD() {
