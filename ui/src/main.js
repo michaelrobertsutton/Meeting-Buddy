@@ -213,17 +213,40 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Quick-type question override
+    let _historyIndex = -1;   // -1 = not browsing history
+    let _historyDraft = '';   // saved draft while browsing
+
     dom.quickQuestion.addEventListener('keydown', async (e) => {
         if (e.key === 'Enter') {
             e.preventDefault();
+            _historyIndex = -1;
             // Execute immediately on Enter (no debounce)
             await setManualQuestionFromInput(true);
         } else if (e.key === 'Escape') {
             e.preventDefault();
+            _historyIndex = -1;
             if (_quickQuestionTimer) clearTimeout(_quickQuestionTimer);
             dom.quickQuestion.value = '';
             await setManualQuestionFromInput(true);
             dom.quickQuestion.blur();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            const history = (state.questionHistory || []).map(q => q.text).filter(Boolean);
+            if (history.length === 0) return;
+            if (_historyIndex === -1) _historyDraft = dom.quickQuestion.value;
+            _historyIndex = Math.min(_historyIndex + 1, history.length - 1);
+            dom.quickQuestion.value = history[_historyIndex];
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            if (_historyIndex === -1) return;
+            _historyIndex -= 1;
+            if (_historyIndex < 0) {
+                _historyIndex = -1;
+                dom.quickQuestion.value = _historyDraft;
+            } else {
+                const history = (state.questionHistory || []).map(q => q.text).filter(Boolean);
+                dom.quickQuestion.value = history[_historyIndex];
+            }
         }
     });
     dom.quickQuestion.addEventListener('blur', () => {
@@ -253,7 +276,14 @@ document.addEventListener('DOMContentLoaded', () => {
     listen('clear-session', () => {
         clearSession();
     });
-    
+
+    listen('focus-question', () => {
+        if (dom.quickQuestion) {
+            dom.quickQuestion.focus();
+            dom.quickQuestion.select();
+        }
+    });
+
     // Onboarding actions
     function showOnboarding() {
         if (!dom.onboarding) {
