@@ -216,9 +216,17 @@ final class WebSocketClient: ObservableObject {
         do {
             let data = try await sendCommand("get_audio_status")
             if let raw = data["audio_status"],
+               let rawDict = raw as? [String: Any],
                let status = Self.decodeAudioStatus(from: raw) {
                 await MainActor.run {
                     self.audioStatus = status
+                }
+
+                // Exit code 1 is expected for missing Screen Recording permission.
+                // Restarting the backend won't fix permissions and can cause churn.
+                let exitCode = rawDict["exit_code"] as? Int
+                if let exitCode, exitCode == 1 {
+                    return
                 }
 
                 if !status.running {
