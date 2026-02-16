@@ -125,9 +125,13 @@ class SynthesisEngine:
         self._last_retrieval_ms = None
         self._result_cache.clear()
 
-    def _cache_key(self, question):
+    def _cache_key(self, question, transcript_context=None):
         norm = re.sub(r'\s+', ' ', question.strip().lower())
-        return f"{self._project_slug or ''}|{norm}"
+        ctx_suffix = ""
+        if transcript_context:
+            tail = re.sub(r'\s+', ' ', transcript_context.strip().lower())[-100:]
+            ctx_suffix = f"|{tail}"
+        return f"{self._project_slug or ''}|{norm}{ctx_suffix}"
 
     def _cache_put(self, key, result):
         self._result_cache.pop(key, None)
@@ -158,7 +162,7 @@ class SynthesisEngine:
 
     async def synthesize(self, question, transcript_context=None):
         """Synthesize an answer for the given question. Returns None if unchanged."""
-        key = self._cache_key(question)
+        key = self._cache_key(question, transcript_context)
         cached = self._cache_get(key)
         if cached is not None:
             self._cache_hit = True
@@ -176,7 +180,7 @@ class SynthesisEngine:
 
     async def synthesize_stream(self, question, transcript_context=None, prefetched_chunks=None):
         """Synthesize with streaming. Yields partial text deltas."""
-        key = self._cache_key(question)
+        key = self._cache_key(question, transcript_context)
         cached = self._cache_get(key)
         if cached is not None:
             self._cache_hit = True
@@ -284,7 +288,7 @@ class SynthesisEngine:
                     if c.get("doc") in valid_titles
                 ]
 
-            key = self._cache_key(question)
+            key = self._cache_key(question, transcript_context)
             self._cache_put(key, result)
             logger.info(
                 "Synthesis complete: %d bullets, confidence=%.2f",
