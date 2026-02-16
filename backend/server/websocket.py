@@ -83,6 +83,14 @@ class TranscriptWebSocket(CommandsMixin):
 
     async def stop(self) -> None:
         """Stop the WebSocket server."""
+        if self._speculative_task and not self._speculative_task.done():
+            self._speculative_task.cancel()
+            try:
+                await self._speculative_task
+            except asyncio.CancelledError:
+                pass
+        self._speculative_task = None
+        self._speculative_chunks = None
         if self._broadcast_task:
             self._broadcast_task.cancel()
             try:
