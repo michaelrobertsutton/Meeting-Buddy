@@ -133,6 +133,12 @@ final class HUDPanelController {
         panel?.setFloating(floating)
     }
 
+    /// Bring an already-visible panel to the front (e.g. on Cmd+Tab / dock click).
+    func orderFront() {
+        NSApp.activate(ignoringOtherApps: true)
+        panel?.makeKeyAndOrderFront(nil)
+    }
+
     // MARK: - Position persistence
 
     private let positionKey = "MeetingBuddyHUD.windowPosition"
