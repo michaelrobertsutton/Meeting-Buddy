@@ -73,6 +73,19 @@ pre-commit install
 
 This repo ships a `.pre-commit-config.yaml` that runs ruff (incl. auto-fix) and basic hygiene checks.
 
+## Dependency update workflow
+
+Dependabot monitors these ecosystems:
+- `github-actions` at `/`
+- `npm` at `/ui`
+- `pip` at `/`
+- `cargo` at `/ui/src-tauri`
+
+Expectations:
+- Dependabot PRs should keep the `dependencies` label.
+- Keep dependency PRs small and ecosystem-scoped when possible.
+- Merge low-risk patch/minor updates promptly; coordinate major upgrades with affected owners.
+
 ## Branch + PR workflow
 
 - **One issue per branch**. Use a name like: `feature/<issue-or-phase>-<short-slug>`
@@ -144,4 +157,3 @@ If you are an AI agent:
 5. Move issue label to `status:review`
 
 Direct commits to `main` are never acceptable.
-
