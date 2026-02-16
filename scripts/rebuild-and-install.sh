@@ -22,6 +22,11 @@ cd "$REPO_ROOT/audio-capture"
 swift build -c release 2>&1
 cp .build/release/AudioCapture "$REPO_ROOT/ui/src-tauri/AudioCapture-aarch64-apple-darwin"
 
+echo "==> Rebuilding MeetingBuddyHUD (Swift)…"
+cd "$REPO_ROOT/native/MeetingBuddyHUD"
+swift build -c release 2>&1
+cp .build/release/MeetingBuddyHUD "$REPO_ROOT/ui/src-tauri/MeetingBuddyHUD-aarch64-apple-darwin"
+
 echo "==> Building .app bundle (this takes ~2 min)…"
 cd "$REPO_ROOT/ui"
 npm run tauri build 2>&1
