@@ -11,7 +11,6 @@ extension Notification.Name {
 struct MeetingBuddyHUDApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
-
     var body: some Scene {
         // No visible window from SwiftUI — NSPanel is managed by AppDelegate
         Settings {
