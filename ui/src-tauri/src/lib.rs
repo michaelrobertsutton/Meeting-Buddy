@@ -1,4 +1,5 @@
 use std::sync::Mutex;
+use std::time::Duration;
 
 use serde::Serialize;
 use tauri::Emitter;
@@ -6,44 +7,163 @@ use tauri::Manager;
 use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
 
-/// Holds the settings sidecar child process so we can kill it before re-launching.
-struct SettingsChild(Mutex<Option<CommandChild>>);
-
 /// Holds the native HUD sidecar child process.
-/// The process stays resident; we signal it to toggle/hide rather than killing it.
+/// The process stays resident; we control it through explicit command IPC.
 struct HudChild(Mutex<Option<CommandChild>>);
 
 /// Flag set to `true` before intentionally killing the HUD (quit only).
 /// The death-watch task checks this: if set, clears it and does NOT quit Tauri.
 struct HudIntentionalKill(Mutex<bool>);
 
-/// Send a Unix signal to the HUD process. Returns true if signal was sent.
 #[cfg(target_os = "macos")]
-fn signal_hud(app: &tauri::AppHandle, sig: libc::c_int) -> bool {
-    if let Some(state) = app.try_state::<HudChild>() {
-        if let Some(ref child) = *state.0.lock().unwrap() {
-            let pid = child.pid() as libc::pid_t;
-            let ret = unsafe { libc::kill(pid, sig) };
-            if ret == 0 {
-                return true;
-            }
-            let errno = std::io::Error::last_os_error().raw_os_error();
-            if errno == Some(libc::ESRCH) {
-                // The child is gone; clear stale PID state so caller can respawn safely.
-                if let Some(state) = app.try_state::<HudChild>() {
-                    let mut guard = state.0.lock().unwrap();
-                    let matches_pid = guard
-                        .as_ref()
-                        .map(|current| current.pid() as libc::pid_t == pid)
-                        .unwrap_or(false);
-                    if matches_pid {
-                        *guard = None;
-                    }
+fn hud_ipc_fifo_path() -> std::path::PathBuf {
+    let uid = unsafe { libc::geteuid() };
+    std::path::PathBuf::from(format!("/tmp/meetingbuddy-hud-{uid}.fifo"))
+}
+
+#[cfg(target_os = "macos")]
+fn pid_is_alive(pid: libc::pid_t) -> bool {
+    let ret = unsafe { libc::kill(pid, 0) };
+    if ret == 0 {
+        return true;
+    }
+    std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
+}
+
+#[cfg(target_os = "macos")]
+fn current_hud_pid(app: &tauri::AppHandle) -> Option<libc::pid_t> {
+    app.try_state::<HudChild>().and_then(|state| {
+        let mut guard = state.0.lock().unwrap();
+        match guard.as_ref() {
+            Some(child) => {
+                let pid = child.pid() as libc::pid_t;
+                if pid_is_alive(pid) {
+                    Some(pid)
+                } else {
+                    *guard = None;
+                    None
                 }
             }
-            log::warn!("[hud] signal {sig} to pid {pid} failed (errno={errno:?})");
+            None => None,
+        }
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn kill_named_processes(process_name: &str, keep_pid: Option<libc::pid_t>) {
+    let output = match std::process::Command::new("pgrep")
+        .arg("-x")
+        .arg(process_name)
+        .output()
+    {
+        Ok(out) if out.status.success() => out,
+        Ok(_) => return,
+        Err(e) => {
+            log::warn!("[hud] pgrep failed for {process_name}: {e}");
+            return;
+        }
+    };
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    for line in stdout.lines() {
+        let Ok(pid) = line.trim().parse::<libc::pid_t>() else {
+            continue;
+        };
+        if keep_pid == Some(pid) {
+            continue;
+        }
+
+        let _ = unsafe { libc::kill(pid, libc::SIGTERM) };
+        std::thread::sleep(Duration::from_millis(120));
+        if pid_is_alive(pid) {
+            let _ = unsafe { libc::kill(pid, libc::SIGKILL) };
+        }
+        log::info!("[hud] terminated stale {process_name} process pid={pid}");
+    }
+}
+
+#[cfg(target_os = "macos")]
+fn stop_current_hud(app: &tauri::AppHandle, intentional: bool) {
+    if let Some(state) = app.try_state::<HudChild>() {
+        if let Some(child) = state.0.lock().unwrap().take() {
+            if intentional {
+                if let Some(flag) = app.try_state::<HudIntentionalKill>() {
+                    *flag.0.lock().unwrap() = true;
+                }
+            }
+            let _ = child.kill();
         }
     }
+}
+
+#[cfg(target_os = "macos")]
+fn send_hud_command_once(command: &str) -> Result<(), String> {
+    use std::ffi::CString;
+
+    let path = hud_ipc_fifo_path();
+    let path_str = path.to_string_lossy();
+    let c_path = CString::new(path_str.as_bytes())
+        .map_err(|e| format!("invalid HUD fifo path {path_str}: {e}"))?;
+    let fd = unsafe { libc::open(c_path.as_ptr(), libc::O_WRONLY | libc::O_NONBLOCK) };
+    if fd < 0 {
+        return Err(format!("open HUD fifo failed: {}", std::io::Error::last_os_error()));
+    }
+
+    let payload = format!("{command}\n");
+    let bytes = payload.as_bytes();
+    let written = unsafe { libc::write(fd, bytes.as_ptr() as *const libc::c_void, bytes.len()) };
+    let _ = unsafe { libc::close(fd) };
+
+    if written < 0 {
+        return Err(format!("write HUD fifo failed: {}", std::io::Error::last_os_error()));
+    }
+    if written as usize != bytes.len() {
+        return Err(format!(
+            "partial HUD fifo write: wrote={} expected={}",
+            written,
+            bytes.len()
+        ));
+    }
+    Ok(())
+}
+
+/// Send an explicit command to the HUD command channel.
+/// If requested, the HUD sidecar is spawned/restarted before retrying.
+#[cfg(target_os = "macos")]
+fn send_hud_command(app: &tauri::AppHandle, command: &str, spawn_if_missing: bool) -> bool {
+    if send_hud_command_once(command).is_ok() {
+        return true;
+    }
+
+    if !spawn_if_missing {
+        return false;
+    }
+
+    spawn_hud_with_deathwatch(app);
+    for _ in 0..8 {
+        std::thread::sleep(Duration::from_millis(80));
+        if send_hud_command_once(command).is_ok() {
+            return true;
+        }
+    }
+
+    // If the channel still does not answer, restart the HUD once to recover from a stale socket/FIFO.
+    stop_current_hud(app, true);
+    std::thread::sleep(Duration::from_millis(120));
+    spawn_hud_with_deathwatch(app);
+    for _ in 0..10 {
+        std::thread::sleep(Duration::from_millis(80));
+        if send_hud_command_once(command).is_ok() {
+            return true;
+        }
+    }
+
+    log::warn!("[hud] failed to deliver command via IPC: {command}");
+    false
+}
+
+#[cfg(not(target_os = "macos"))]
+fn send_hud_command(_app: &tauri::AppHandle, _command: &str, _spawn_if_missing: bool) -> bool {
     false
 }
 
@@ -71,12 +191,25 @@ fn get_backend_diagnostics(state: tauri::State<'_, BackendDiagState>) -> Backend
 /// Spawn the MeetingBuddyHUD sidecar and attach a death-watch task.
 /// If the HUD exits without the intentional-kill flag being set, Tauri exits too.
 fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
+    #[cfg(target_os = "macos")]
+    {
+        if current_hud_pid(app).is_some() {
+            return;
+        }
+        // Prevent stale/reinstalled HUD binaries from fighting focus with the current runtime.
+        kill_named_processes("MeetingBuddyHUD", None);
+    }
+
     match app.shell().sidecar("MeetingBuddyHUD") {
         Ok(cmd) => match cmd.spawn() {
             Ok((mut rx, child)) => {
                 let hud_pid = child.pid();
                 if let Some(state) = app.try_state::<HudChild>() {
                     *state.0.lock().unwrap() = Some(child);
+                }
+                #[cfg(target_os = "macos")]
+                {
+                    kill_named_processes("MeetingBuddyHUD", Some(hud_pid as libc::pid_t));
                 }
                 let h = app.clone();
                 tauri::async_runtime::spawn(async move {
@@ -119,22 +252,19 @@ fn get_backend_url() -> String {
 
 #[tauri::command]
 fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
-    use tauri::WebviewWindowBuilder;
-    // Close any existing settings window first
-    if let Some(w) = app.get_webview_window("settings") {
-        let _ = w.close();
+    #[cfg(target_os = "macos")]
+    {
+        if send_hud_command(&app, "open_settings", true) {
+            return Ok(());
+        }
+        return Err("failed to reach HUD settings command channel".to_string());
     }
-    WebviewWindowBuilder::new(&app, "settings", tauri::WebviewUrl::App("settings.html".into()))
-        .title("Meeting Buddy Settings")
-        .inner_size(860.0, 600.0)
-        .resizable(true)
-        .decorations(true)
-        .build()
-        .map_err(|e| {
-            log::error!("[settings] failed to open window: {e}");
-            e.to_string()
-        })?;
-    Ok(())
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
+        Err("native settings sidecar is only supported on macOS".to_string())
+    }
 }
 
 #[tauri::command]
@@ -490,9 +620,6 @@ pub fn run() {
             }
 
             // Register sidecar child states
-
-            app.manage(SettingsChild(Mutex::new(None)));
-
             app.manage(HudChild(Mutex::new(None)));
 
             app.manage(HudIntentionalKill(Mutex::new(false)));
@@ -535,10 +662,7 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
-                                // Signal HUD to toggle; if process is dead, respawn it.
-                                if !signal_hud(&app_handle, libc::SIGUSR1) {
-                                    spawn_hud_with_deathwatch(&app_handle);
-                                }
+                                let _ = send_hud_command(&app_handle, "toggle_hud", true);
                             }
                             "open_settings" => {
                                 if let Err(e) = open_settings_window(app_handle.clone()) {
@@ -547,8 +671,7 @@ pub fn run() {
                             }
 
                             "hide_hud" => {
-                                // Signal HUD to hide (panel only; process stays resident).
-                                signal_hud(&app_handle, libc::SIGUSR2);
+                                let _ = send_hud_command(&app_handle, "hide_hud", false);
                             }
 
                             "export" => {
@@ -590,10 +713,7 @@ pub fn run() {
         match event {
             tauri::RunEvent::Reopen { .. } | tauri::RunEvent::Resumed => {
                 // Dock click / Cmd+Tab should restore or front the HUD sidecar.
-                // Use SIGWINCH to avoid toggle semantics that can hide/fight focus.
-                if !signal_hud(app_handle, libc::SIGWINCH) {
-                    spawn_hud_with_deathwatch(app_handle);
-                }
+                let _ = send_hud_command(app_handle, "restore_hud", true);
             }
             tauri::RunEvent::Exit => {
                 // Kill the backend sidecar on app exit and wait briefly so it can release the port
@@ -608,22 +728,18 @@ pub fn run() {
                     }
                 }
 
-                // Kill settings sidecar on app exit
-
-                if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                    if let Some(child) = state.0.lock().unwrap().take() {
-                        let _ = child.kill();
-
-                        std::thread::sleep(std::time::Duration::from_millis(150));
-                    }
-                }
-
                 // Kill HUD sidecar on app exit
 
                 if let Some(state) = app_handle.try_state::<HudChild>() {
                     if let Some(child) = state.0.lock().unwrap().take() {
                         let _ = child.kill();
                     }
+                }
+
+                #[cfg(target_os = "macos")]
+                {
+                    kill_named_processes("MeetingBuddySettings", None);
+                    kill_named_processes("MeetingBuddyHUD", None);
                 }
             }
             _ => {}

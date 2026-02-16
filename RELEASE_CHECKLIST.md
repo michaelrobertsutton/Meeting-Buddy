@@ -21,6 +21,7 @@ This checklist is meant to keep releases boring. Run it before cutting a new bui
 2. Run one-time setup: `bash scripts/install.sh` (from a clone that has `scripts/`, or document this step for users).
 3. Launch the app — HUD should appear and backend should start (venv at `~/.meeting-buddy/venv`).
 4. Verify: transcript updates, Cmd+, opens settings, Q&A works.
+5. Open/close Settings repeatedly (gear, Cmd+,, tray) and confirm the same Settings instance is reused (no relaunch flash).
 
 ## 3) Sidecar binaries in the bundle
 
@@ -47,7 +48,10 @@ Launch the app and confirm:
 - [ ] HUD appears and remains always-on-top
 - [ ] HUD toggles with `Option + Space`
 - [ ] Settings opens with `Cmd + ,`
+- [ ] Settings sidebar remains interactive after repeated open/close cycles
+- [ ] Cmd+Tab / dock reopen while Settings is visible does not unexpectedly front HUD over Settings
 - [ ] Transcript begins updating when system audio is playing
+- [ ] Settings → Permissions → Screen Recording matches runtime capture behavior (audio active => granted)
 - [ ] Question detection changes the active question during a test call/video
 - [ ] Answer card populates with:
   - [ ] one-liner
@@ -55,6 +59,9 @@ Launch the app and confirm:
   - [ ] citations
 - [ ] Export works (writes Markdown/JSON to disk)
 - [ ] **Synthesis cache hit**: ask the same question twice (or trigger the same detected question twice within a session). The second answer should appear immediately with no visible LLM latency. Confirm a `Cache hit` log line in the backend output.
+- [ ] No duplicate stale processes after reopen cycles:
+  - [ ] `pgrep -x MeetingBuddyHUD | wc -l` is `1`
+  - [ ] `pgrep -x MeetingBuddySettings | wc -l` is `0` when settings closed, `1` when open
 
 ## 6) Document ingestion checks
 

@@ -2,6 +2,51 @@ import Foundation
 import AppKit
 
 enum SettingsLauncher {
+    private static let showWindowNotification = Notification.Name("MeetingBuddySettings.ShowWindow")
+
+    private static func isSettingsApp(_ app: NSRunningApplication) -> Bool {
+        let exe = app.executableURL?.lastPathComponent
+        let name = app.localizedName
+
+        if let exe, (exe == "MeetingBuddySettings" || exe.hasPrefix("MeetingBuddySettings-")) {
+            return true
+        }
+
+        // Fallback for app-bundle launches where executableURL may be different.
+        if let name, (name == "MeetingBuddySettings" || name == "Meeting Buddy Settings") {
+            return true
+        }
+
+        return false
+    }
+
+    private static func runningSettingsApps() -> [NSRunningApplication] {
+        NSWorkspace.shared.runningApplications.filter(isSettingsApp(_:))
+    }
+
+    private static func dedupeRunningSettings(_ apps: [NSRunningApplication]) -> NSRunningApplication? {
+        guard !apps.isEmpty else { return nil }
+        let sorted = apps.sorted { $0.processIdentifier < $1.processIdentifier }
+        let primary = sorted[0]
+        for duplicate in sorted.dropFirst() {
+            duplicate.terminate()
+        }
+        return primary
+    }
+
+    private static func requestShowWindow() {
+        DistributedNotificationCenter.default().postNotificationName(
+            showWindowNotification,
+            object: nil,
+            userInfo: nil,
+            deliverImmediately: true
+        )
+    }
+
+    private static func bringToFront(_ app: NSRunningApplication) {
+        requestShowWindow()
+        app.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+    }
 
     private static func bundledSettingsExecutable() -> URL? {
         // For packaged installs, assume the Settings executable is alongside the HUD executable.
@@ -19,26 +64,8 @@ enum SettingsLauncher {
     ///
     /// Note: this is intentionally best-effort for internal tooling.
     static func launch() throws {
-        // Single-instance behavior: if Settings is already running, bring it to front.
-        // Settings may be launched as a raw executable (not necessarily a .app bundle), so match by executable name.
-        let runningSettings = NSWorkspace.shared.runningApplications.filter { app in
-            let exe = app.executableURL?.lastPathComponent
-            let name = app.localizedName
-
-            if let exe, (exe == "MeetingBuddySettings" || exe.hasPrefix("MeetingBuddySettings-")) {
-                return true
-            }
-
-            // Fallback for app-bundle launches where executableURL may be different.
-            if let name, (name == "MeetingBuddySettings" || name == "Meeting Buddy Settings") {
-                return true
-            }
-
-            return false
-        }
-
-        if let existing = runningSettings.first {
-            existing.activate(options: [.activateAllWindows, .activateIgnoringOtherApps])
+        if let existing = dedupeRunningSettings(runningSettingsApps()) {
+            bringToFront(existing)
             return
         }
 
@@ -81,6 +108,9 @@ enum SettingsLauncher {
             process.executableURL = exe
             process.arguments = []
             try process.run()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+                requestShowWindow()
+            }
             return
         }
 

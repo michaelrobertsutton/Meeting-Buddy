@@ -22,7 +22,8 @@ All audio and transcript data stays on your device. Only the active question + r
 
 ### UI & Controls
 - **Native macOS HUD** — SwiftUI/AppKit `NSPanel` with real translucency (MeetingBuddyHUD)
-- **Tauri process manager** — tray + global shortcuts; spawns the HUD + Settings sidecars
+- **Tauri process manager** — tray + app lifecycle host that spawns HUD sidecar and routes top-level window commands
+- **Explicit HUD command IPC** — `toggle_hud`, `hide_hud`, `restore_hud`, `open_settings` over a local FIFO (no Unix signal UX control)
 - **Settings panel** — native SwiftUI settings app for API key/OAuth, projects, docs, permissions
 
 ## Prerequisites
@@ -133,7 +134,7 @@ python -m backend.main
 cd ui && npm run tauri dev
 ```
 
-Tip: Settings opens as a **separate Settings app** (Cmd+,) with sidebar navigation. This is intentional (fast-path during the native migration).
+Tip: Settings opens as a **separate native Settings app** (Cmd+,) with sidebar navigation. Repeated open/close reuses a single running instance and brings its window back to front (no forced relaunch).
 
 Click the gear icon in the overlay to:
 1. **Set your OpenAI API key** (or use OAuth with ChatGPT Plus) — required for synthesis
@@ -176,11 +177,11 @@ python -m ingest ingest --project "my-project" --path https://example.com/articl
 python -m ingest list-docs --project "my-project"
 ```
 
-## Settings behavior (by design)
+## Settings behavior
 
-Settings launches as a **separate native app** (`MeetingBuddySettings`) rather than an in-HUD sheet. This keeps the HUD lightweight and lets Settings own permissions deep-links and longer-running admin flows.
+Settings launches as a **separate native app** (`MeetingBuddySettings`) rather than an in-HUD sheet. The HUD and tray route settings opens through an explicit command contract, and the Settings app keeps a single window instance that is shown/hidden instead of terminate/relaunch cycles.
 
-We can unify Settings into the HUD later, but the current behavior is intentional for this internal tool.
+Permissions in the Settings UI prioritize runtime capture diagnostics (`get_audio_status`) so Screen Recording status aligns with the active capture pipeline.
 
 ## Hotkeys
 

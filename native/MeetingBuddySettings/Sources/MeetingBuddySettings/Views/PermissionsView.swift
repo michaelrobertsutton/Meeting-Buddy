@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import AVFoundation
-import CoreGraphics
 
 struct PermissionsView: View {
     @EnvironmentObject var store: SettingsStore
@@ -41,22 +40,20 @@ struct PermissionsView: View {
         }
     }
 
-    @State private var screenRecordingGrantedLocal: Bool = false
     @State private var microphoneGrantedLocal: Bool = false
 
-    private var runtimeScreenRecordingGranted: Bool {
-        guard let status = store.audioStatus else { return false }
-        return status.running
-            || status.frames_received > 0
-            || status.receiving_audio
-            || status.receiving_non_silent_audio
-    }
-
     private var screenRecordingState: PermissionState {
-        if runtimeScreenRecordingGranted || screenRecordingGrantedLocal {
+        guard store.isConnected, let status = store.audioStatus else {
+            return .unknown
+        }
+
+        if status.frames_received > 0 || status.receiving_audio || status.receiving_non_silent_audio {
             return .granted
         }
-        return store.isConnected ? .notGranted : .unknown
+        if !status.running {
+            return .notGranted
+        }
+        return .unknown
     }
 
     private var microphoneState: PermissionState {
@@ -69,7 +66,7 @@ struct PermissionsView: View {
     var body: some View {
         Form {
             Section {
-                Text("Meeting Buddy needs the following macOS permissions to capture system audio and run correctly. Open each pane to grant or check access.")
+                Text("Meeting Buddy uses runtime capture diagnostics for Screen Recording status so this view matches the active capture pipeline, not the Settings helper process identity.")
                     .foregroundStyle(.secondary)
             }
 
@@ -77,7 +74,7 @@ struct PermissionsView: View {
                 permissionRow(
                     title: "Screen Recording",
                     state: screenRecordingState,
-                    description: "Required for capturing system audio (e.g. meeting audio, browser playback) via ScreenCaptureKit. Grant access to \"Meeting Buddy\" (or Terminal when running from the command line).",
+                    description: "Required for capturing system audio (e.g. meeting audio, browser playback) via ScreenCaptureKit. Grant access to \"Meeting Buddy\" (or Terminal when running from the command line), then relaunch the app.",
                     buttonTitle: "Open Screen Recording settings",
                     urlString: PrivacyPane.screenCapture.rawValue
                 )
@@ -106,7 +103,6 @@ struct PermissionsView: View {
     }
 
     private func checkPermissions() {
-        screenRecordingGrantedLocal = CGPreflightScreenCaptureAccess()
         microphoneGrantedLocal = AVCaptureDevice.authorizationStatus(for: .audio) == .authorized
     }
 
