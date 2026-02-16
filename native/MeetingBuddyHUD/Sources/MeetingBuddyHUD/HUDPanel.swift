@@ -39,6 +39,10 @@ final class HUDPanel: NSPanel {
     func setFloating(_ floating: Bool) {
         level = floating ? .floating : .normal
     }
+
+    // Non-activating panels need this so they can still accept key focus when brought forward.
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 /// Delegate so the red close button hides the HUD instead of closing the app
@@ -127,6 +131,10 @@ final class HUDPanelController {
 
     var isVisible: Bool {
         panel?.isVisible ?? false
+    }
+
+    var isKeyWindow: Bool {
+        panel?.isKeyWindow ?? false
     }
 
     func setFloating(_ floating: Bool) {

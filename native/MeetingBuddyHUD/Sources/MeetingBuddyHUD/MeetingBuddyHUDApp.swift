@@ -38,6 +38,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var toggleSignalSource: DispatchSourceSignal?
     private var hideSignalSource: DispatchSourceSignal?
 
+    private func persistedFloatingState() -> Bool {
+        if UserDefaults.standard.object(forKey: HUDPanelController.windowFloatingKey) == nil {
+            return true
+        }
+        return UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Best-effort backend launch (no-op if backend already running or sidecar not found)
         BackendLauncher.launchIfAvailable()
@@ -45,8 +52,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         // Connect to backend
         ws.connect()
 
-        // Show HUD immediately (unpinned by default; persist last pin state)
-        let initialFloating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+        // Show HUD immediately (pinned on first launch, then persist user pin state)
+        let initialFloating = persistedFloatingState()
         hudController.show(initialFloating: initialFloating) {
             ContentView(ws: ws)
         }
@@ -119,7 +126,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     // Re-show HUD when user clicks dock icon or re-opens the app.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
         if !hasVisibleWindows || !hudController.isVisible {
-            let initialFloating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+            let initialFloating = persistedFloatingState()
             hudController.show(initialFloating: initialFloating) {
                 ContentView(ws: ws)
             }
@@ -130,7 +137,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Called when the user Cmd+Tabs to us or clicks the dock icon.
     func applicationDidBecomeActive(_ notification: Notification) {
-        let floating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+        let floating = persistedFloatingState()
         if hudController.isVisible {
             hudController.orderFront()
         } else {
@@ -203,12 +210,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func toggleHUD() {
-        let initialFloating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
-        hudController.toggle(initialFloating: initialFloating) {
-            ContentView(ws: ws)
-        }
+        let floating = persistedFloatingState()
         if hudController.isVisible {
-            ws.isWindowFloating = initialFloating
+            if NSApp.isActive && hudController.isKeyWindow {
+                hudController.hide()
+            } else {
+                hudController.orderFront()
+            }
+        } else {
+            hudController.show(initialFloating: floating) {
+                ContentView(ws: ws)
+            }
+            ws.isWindowFloating = floating
         }
     }
 }
