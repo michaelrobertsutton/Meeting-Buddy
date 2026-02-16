@@ -40,6 +40,8 @@ class SCKCapture:
         self._overflow_count = 0
         self._frames_received = 0
         self._last_frame_time: float | None = None
+        self._non_silent_frames: int = 0
+        self._last_non_silent_time: float | None = None
         self._process_exit_code: int | None = None
         self._stderr_lines: list[str] = []
 
@@ -88,14 +90,16 @@ class SCKCapture:
             
             # Check if audio is actually present (not just silence)
             audio_level = np.abs(samples).max()
-            if audio_level > 0.001:  # Non-silent audio detected
-                if not first_frame_logged:
-                    logger.info("Audio frames received (level: %.3f)", audio_level)
-                    first_frame_logged = True
-
+            now = time.time()
             with self._diag_lock:
                 self._frames_received += 1
-                self._last_frame_time = time.time()
+                self._last_frame_time = now
+                if audio_level > 0.001:
+                    self._non_silent_frames += 1
+                    self._last_non_silent_time = now
+                    if not first_frame_logged:
+                        first_frame_logged = True
+                        logger.info("Non-silent audio received (level: %.3f)", audio_level)
 
             try:
                 self._queue.put_nowait(samples)
@@ -149,6 +153,8 @@ class SCKCapture:
         self._stop_event.clear()
         self._frames_received = 0
         self._last_frame_time = None
+        self._non_silent_frames = 0
+        self._last_non_silent_time = None
         self._process_exit_code = None
         self._stderr_lines = []
 
@@ -223,12 +229,16 @@ class SCKCapture:
             frames_received = self._frames_received
             overflow_count = self._overflow_count
             last_frame_time = self._last_frame_time
+            non_silent_frames = self._non_silent_frames
+            last_non_silent_time = self._last_non_silent_time
 
+        now = time.time()
         status = {
             "running": self._process is not None and self._process.poll() is None,
             "frames_received": frames_received,
             "queue_size": self._queue.qsize(),
             "overflow_count": overflow_count,
+            "non_silent_frames": non_silent_frames,
         }
 
         if self._process:
@@ -236,11 +246,16 @@ class SCKCapture:
             status["exit_code"] = self._process.poll()
 
         if last_frame_time is not None:
-            time_since_last_frame = time.time() - last_frame_time
+            time_since_last_frame = now - last_frame_time
             status["seconds_since_last_frame"] = time_since_last_frame
             status["receiving_audio"] = time_since_last_frame < 2.0
         else:
             status["receiving_audio"] = False
+
+        if last_non_silent_time is not None:
+            status["receiving_non_silent_audio"] = (now - last_non_silent_time) < 2.0
+        else:
+            status["receiving_non_silent_audio"] = False
 
         if self._stderr_lines:
             status["last_stderr_lines"] = self._stderr_lines[-5:]
