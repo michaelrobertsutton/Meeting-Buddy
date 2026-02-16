@@ -614,6 +614,20 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
+        // Dock icon clicked (or app re-opened): kill buried HUD and respawn so the new
+        // window calls makeKeyAndOrderFront and appears on top.
+        if let tauri::RunEvent::Reopen { .. } = event {
+            if let Some(state) = app_handle.try_state::<HudChild>() {
+                if let Some(old) = state.0.lock().unwrap().take() {
+                    let _ = old.kill();
+                }
+                #[allow(clippy::needless_borrow)]
+                if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
+                    log::error!("[hud] reopen: {e}");
+                }
+            }
+        }
+
         if let tauri::RunEvent::Exit = event {
             // Kill the backend sidecar on app exit and wait briefly so it can release the port
 
