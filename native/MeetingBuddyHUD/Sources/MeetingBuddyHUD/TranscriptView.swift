@@ -6,6 +6,7 @@ import MeetingBuddyProtocol
 struct TranscriptView: View {
     let segments: [TranscriptSegment]
     let lastSegmentAt: Date?
+    var isListening: Bool = true
     var onTapSegment: ((String) -> Void)? = nil
 
     @State private var now: Date = Date()
@@ -52,25 +53,34 @@ struct TranscriptView: View {
                     }
                 }
 
-                if isIdle {
+                if !isListening || isIdle {
                     HStack(spacing: 8) {
-                        Circle()
-                            .fill(AppTheme.accentBlue)
-                            .frame(width: 6, height: 6)
-                            .scaleEffect(listeningPulse ? 1.0 : 0.6)
-                            .animation(
-                                .easeInOut(duration: 1.2).repeatForever(autoreverses: true),
-                                value: listeningPulse
-                            )
+                        if isListening {
+                            Circle()
+                                .fill(AppTheme.accentBlue)
+                                .frame(width: 6, height: 6)
+                                .scaleEffect(listeningPulse ? 1.0 : 0.6)
+                                .animation(
+                                    .easeInOut(duration: 1.2).repeatForever(autoreverses: true),
+                                    value: listeningPulse
+                                )
+                        } else {
+                            Image(systemName: "pause.fill")
+                                .font(.system(size: 8))
+                                .foregroundStyle(AppTheme.textSecondary)
+                        }
 
-                        Text("Listening…")
+                        Text(isListening ? "Listening…" : "Paused")
                             .font(.caption)
                             .foregroundStyle(AppTheme.textSecondary)
                     }
                     .padding(.top, 12)
-                    .onAppear { listeningPulse = true }
+                    .onAppear { listeningPulse = isListening }
                     .onChange(of: isIdle) { idle in
-                        listeningPulse = idle
+                        listeningPulse = idle && isListening
+                    }
+                    .onChange(of: isListening) { listening in
+                        listeningPulse = listening && isIdle
                     }
                 }
             }
