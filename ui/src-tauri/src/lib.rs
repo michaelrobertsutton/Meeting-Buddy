@@ -27,7 +27,21 @@ fn signal_hud(app: &tauri::AppHandle, sig: libc::c_int) -> bool {
             if ret == 0 {
                 return true;
             }
-            log::warn!("[hud] signal {sig} to pid {pid} failed: {ret}");
+            let errno = std::io::Error::last_os_error().raw_os_error();
+            if errno == Some(libc::ESRCH) {
+                // The child is gone; clear stale PID state so caller can respawn safely.
+                if let Some(state) = app.try_state::<HudChild>() {
+                    let mut guard = state.0.lock().unwrap();
+                    let matches_pid = guard
+                        .as_ref()
+                        .map(|current| current.pid() as libc::pid_t == pid)
+                        .unwrap_or(false);
+                    if matches_pid {
+                        *guard = None;
+                    }
+                }
+            }
+            log::warn!("[hud] signal {sig} to pid {pid} failed (errno={errno:?})");
         }
     }
     false
@@ -60,6 +74,7 @@ fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
     match app.shell().sidecar("MeetingBuddyHUD") {
         Ok(cmd) => match cmd.spawn() {
             Ok((mut rx, child)) => {
+                let hud_pid = child.pid();
                 if let Some(state) = app.try_state::<HudChild>() {
                     *state.0.lock().unwrap() = Some(child);
                 }
@@ -68,6 +83,18 @@ fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
                     use tauri_plugin_shell::process::CommandEvent;
                     while let Some(ev) = rx.recv().await {
                         if let CommandEvent::Terminated(_) = ev {
+                            if let Some(state) = h.try_state::<HudChild>() {
+                                let mut guard = state.0.lock().unwrap();
+                                let should_clear = guard
+                                    .as_ref()
+                                    .map(|current| current.pid() == hud_pid)
+                                    .unwrap_or(false);
+                                if should_clear {
+                                    // Only clear if this watcher owns the current child.
+                                    // This avoids clobbering a newer HUD spawned after a crash.
+                                    *guard = None;
+                                }
+                            }
                             if let Some(flag) = h.try_state::<HudIntentionalKill>() {
                                 let mut f = flag.0.lock().unwrap();
                                 if *f { *f = false; break; }
