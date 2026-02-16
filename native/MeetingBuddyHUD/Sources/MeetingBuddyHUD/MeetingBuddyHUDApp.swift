@@ -41,6 +41,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsHotkeyLocalMonitor: Any?
     private var hideObserver: NSObjectProtocol?
     private var windowPinObserver: NSObjectProtocol?
+    /// DispatchSource that handles SIGUSR1 (sent by Tauri on dock-icon click).
+    private var signalSource: DispatchSourceSignal?
+    /// Path where we publish our PID so Tauri can send SIGUSR1 to raise the window.
+    static let pidFile = "/tmp/meetingbuddy-hud.pid"
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Hide dock icon (menu bar app / accessory)
@@ -48,6 +52,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Best-effort backend launch (no-op if backend already running or sidecar not found)
         BackendLauncher.launchIfAvailable()
+
+        // Publish our PID so Tauri can send SIGUSR1 to raise the window without
+        // killing and re-spawning the process (which would flash / recreate the HUD).
+        let pid = ProcessInfo.processInfo.processIdentifier
+        try? "\(pid)".write(toFile: AppDelegate.pidFile, atomically: true, encoding: .utf8)
+
+        // SIGUSR1 → show/raise the HUD panel.
+        // Tell the kernel we handle this signal via DispatchSource, not the default handler.
+        signal(SIGUSR1, SIG_IGN)
+        let src = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        src.setEventHandler { [weak self] in
+            guard let self else { return }
+            let floating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+            self.hudController.show(initialFloating: floating) { ContentView(ws: self.ws) }
+            self.ws.isWindowFloating = floating
+        }
+        src.resume()
+        signalSource = src
 
         // Connect to backend
         ws.connect()
@@ -133,6 +155,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             settingsHotkeyLocalMonitor = nil
         }
         ws.disconnect()
+        signalSource?.cancel()
+        try? FileManager.default.removeItem(atPath: AppDelegate.pidFile)
     }
 
     /// Handle key down; return nil to consume the event, or the event to pass through.

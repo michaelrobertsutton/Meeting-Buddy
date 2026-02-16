@@ -94,8 +94,9 @@ body {
     flex: 1;
     margin-left: 8px;
     margin-right: 8px;
-    min-width: 120px;
-    max-width: 520px;
+    min-width: 160px;
+    max-width: 580px;
+    width: 220px;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 6px;
@@ -104,6 +105,7 @@ body {
     color: var(--mb-text);
     outline: none;
     font-weight: 400;
+    transition: width 0.15s ease, border-color 0.15s ease;
 }
 
 #quick-question::placeholder {
@@ -112,6 +114,7 @@ body {
 }
 
 #quick-question:focus {
+    width: 320px;
     border-color: color-mix(in srgb, var(--mb-accent) 35%, transparent);
 }
 

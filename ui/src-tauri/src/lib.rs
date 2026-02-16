@@ -482,7 +482,7 @@ pub fn run() {
                 };
 
                 let toggle_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
-
+                let focus_shortcut = Shortcut::new(Some(Modifiers::META), Code::KeyK);
 
                 let app_handle = app.handle().clone();
 
@@ -508,7 +508,11 @@ pub fn run() {
                                         log::error!("[hud] {e}");
                                     }
                                 }
-
+                            } else if shortcut == &focus_shortcut {
+                                // Cmd+K: focus the question input in all webview windows
+                                for window in app_handle.webview_windows().values() {
+                                    let _ = window.emit("focus-question", ());
+                                }
                             }
 
                         })
@@ -518,6 +522,7 @@ pub fn run() {
                 )?;
 
                 app.global_shortcut().register(toggle_shortcut)?;
+                app.global_shortcut().register(focus_shortcut)?;
 
             }
 
@@ -614,16 +619,30 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
-        // Dock icon clicked (or app re-opened): kill buried HUD and respawn so the new
-        // window calls makeKeyAndOrderFront and appears on top.
+        // Dock icon clicked: send SIGUSR1 to the running HUD so it raises its window
+        // without kill+respawn (which flashes/recreates the window on every click).
+        // Fall back to spawning fresh if the pid file is missing or stale.
         if let tauri::RunEvent::Reopen { .. } = event {
-            if let Some(state) = app_handle.try_state::<HudChild>() {
-                if let Some(old) = state.0.lock().unwrap().take() {
-                    let _ = old.kill();
-                }
-                #[allow(clippy::needless_borrow)]
-                if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
-                    log::error!("[hud] reopen: {e}");
+            let pid_file = "/tmp/meetingbuddy-hud.pid";
+            let signalled = std::fs::read_to_string(pid_file)
+                .ok()
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .map(|pid| {
+                    std::process::Command::new("kill")
+                        .args(["-USR1", &pid.to_string()])
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+
+            if !signalled {
+                // HUD not running — spawn fresh.
+                if let Some(state) = app_handle.try_state::<HudChild>() {
+                    #[allow(clippy::needless_borrow)]
+                    if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
+                        log::error!("[hud] reopen spawn: {e}");
+                    }
                 }
             }
         }
