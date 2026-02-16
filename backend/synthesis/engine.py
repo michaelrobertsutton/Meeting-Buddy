@@ -13,8 +13,6 @@ from backend.synthesis.prompt import SYSTEM_PROMPT, build_user_prompt
 
 logger = logging.getLogger(__name__)
 
-_CACHE_MAX = 20
-
 # ChatGPT backend for OAuth (uses ChatGPT Plus/Pro subscription quota)
 _CHATGPT_BACKEND_URL = "https://chatgpt.com/backend-api/codex/responses"
 _CHATGPT_DEFAULT_MODEL = "gpt-5.2-codex"
@@ -107,7 +105,7 @@ class SynthesisEngine:
     def _cache_put(self, key, result):
         self._result_cache.pop(key, None)
         self._result_cache[key] = result
-        while len(self._result_cache) > _CACHE_MAX:
+        while len(self._result_cache) > self._config.cache_max:
             self._result_cache.popitem(last=False)
 
     def _cache_get(self, key) -> SynthesisResult | None:
@@ -139,6 +137,7 @@ class SynthesisEngine:
             self._cache_hit = True
             self._last_question = question
             self._last_result = cached
+            logger.info("Cache hit (%d entries): %s", len(self._result_cache), question[:80])
             return self._last_result
         self._cache_hit = False
         if question == self._last_question:
@@ -156,6 +155,7 @@ class SynthesisEngine:
             self._cache_hit = True
             self._last_question = question
             self._last_result = cached
+            logger.info("Cache hit (%d entries): %s", len(self._result_cache), question[:80])
             return  # no yields -> websocket fallback hits synthesize() -> returns cached result
         self._cache_hit = False
         if question == self._last_question:

@@ -75,6 +75,7 @@ class SynthesisConfig:
     temperature: float = 0.2
     max_tokens: int = 900
     enabled: bool = True
+    cache_max: int = 20  # Maximum number of cached synthesis results (LRU)
 
 
 @dataclass
