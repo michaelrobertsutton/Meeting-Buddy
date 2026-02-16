@@ -104,10 +104,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Register global hotkey (Alt+Space) to toggle HUD.
-        // Global event monitors require Accessibility permission; prompt once if missing.
-        let accessibilityGranted = AXIsProcessTrustedWithOptions(
-            [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-        )
+        // Check permission without prompting first; only show the system dialog if not yet granted.
+        let accessibilityGranted = AXIsProcessTrusted()
+        if !accessibilityGranted {
+            AXIsProcessTrustedWithOptions(
+                [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            )
+        }
         if accessibilityGranted {
             hotkey = GlobalHotkey { [weak self] in
                 self?.toggleHUD()
