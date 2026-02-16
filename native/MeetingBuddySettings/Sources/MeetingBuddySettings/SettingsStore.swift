@@ -1,5 +1,6 @@
 import Foundation
 import AppKit
+import MeetingBuddyProtocol
 
 @MainActor
 class SettingsStore: ObservableObject {
@@ -18,6 +19,7 @@ class SettingsStore: ObservableObject {
     @Published var errorMessage: String? = nil
     @Published var toastMessage: String? = nil
     @Published var reconnecting: Bool = false
+    @Published var audioStatus: AudioStatus? = nil
 
     // MARK: - Private
 
@@ -25,6 +27,7 @@ class SettingsStore: ObservableObject {
     private var pendingCommands: [String: CheckedContinuation<[String: Any], Error>] = [:]
     private var listenerTask: Task<Void, Never>?
     private var connectionPollTask: Task<Void, Never>?
+    private var audioStatusPollTask: Task<Void, Never>?
 
     // MARK: - Lifecycle
 
@@ -50,11 +53,24 @@ class SettingsStore: ObservableObject {
                 try? await Task.sleep(nanoseconds: 500_000_000)
             }
         }
+
+        audioStatusPollTask = Task {
+            while !Task.isCancelled {
+                let connected = await client.isConnected
+                if connected {
+                    await self.fetchAudioStatus()
+                } else {
+                    await MainActor.run { self.audioStatus = nil }
+                }
+                try? await Task.sleep(nanoseconds: 2_000_000_000)
+            }
+        }
     }
 
     func stop() {
         listenerTask?.cancel()
         connectionPollTask?.cancel()
+        audioStatusPollTask?.cancel()
         Task { await client.disconnect() }
     }
 
@@ -242,6 +258,17 @@ class SettingsStore: ObservableObject {
         }
     }
 
+    func fetchAudioStatus() async {
+        do {
+            let data = try await sendCommand("get_audio_status")
+            let decoded = Self.decodeAudioStatus(data["audio_status"] as? [String: Any])
+            audioStatus = decoded
+        } catch {
+            // Non-fatal: backend may be reconnecting.
+            audioStatus = nil
+        }
+    }
+
     // MARK: - Helpers
 
     private func showToast(_ msg: String) {
@@ -275,6 +302,13 @@ class SettingsStore: ObservableObject {
         if let raw = data["projects"] as? [[String: Any]] {
             projects = raw.compactMap { decodeProject($0) }
         }
+    }
+
+    private static func decodeAudioStatus(_ raw: [String: Any]?) -> AudioStatus? {
+        guard let raw else { return nil }
+        guard JSONSerialization.isValidJSONObject(raw),
+              let data = try? JSONSerialization.data(withJSONObject: raw) else { return nil }
+        return try? JSONDecoder().decode(AudioStatus.self, from: data)
     }
 
     private func decodeProject(_ dict: [String: Any]) -> ProjectInfo? {
