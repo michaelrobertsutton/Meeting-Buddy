@@ -72,6 +72,14 @@ public struct PinnedAnswer: Codable, Identifiable {
     }
 }
 
+public struct AudioStatus: Codable {
+    public let running: Bool
+    public let frames_received: Int
+    public let non_silent_frames: Int
+    public let receiving_audio: Bool
+    public let receiving_non_silent_audio: Bool
+}
+
 public struct BackendMessage: Codable {
     public let type: String?
     public let protocol_version: Int?
@@ -105,6 +113,9 @@ public struct BackendMessage: Codable {
     // Audio health event fields (audio_warning / audio_error)
     public let message: String?
 
+    // Real-time audio capture stats included in every snapshot
+    public let audio_status: AudioStatus?
+
     public init(
         type: String?,
         protocol_version: Int?,
@@ -124,7 +135,8 @@ public struct BackendMessage: Codable {
         error: String?,
         data: AnyCodable?,
         question: String?,
-        message: String? = nil
+        message: String? = nil,
+        audio_status: AudioStatus? = nil
     ) {
         self.type = type
         self.protocol_version = protocol_version
@@ -145,6 +157,7 @@ public struct BackendMessage: Codable {
         self.data = data
         self.question = question
         self.message = message
+        self.audio_status = audio_status
     }
 }
 
