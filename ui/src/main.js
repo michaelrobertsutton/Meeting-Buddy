@@ -12,6 +12,7 @@ const state = {
     questionHistory: [],
     historyOpen: false,
     manualQuestion: false,
+    listening: true,
     synthesisSearching: false,
     qaHistory: [],
     prepQuestions: [],
@@ -96,6 +97,7 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.transcriptQuiet = document.getElementById('transcript-quiet');
     dom.connectionStatus = document.getElementById('connection-status');
     dom.pinStatus = document.getElementById('pin-status');
+    dom.btnPause = document.getElementById('btn-pause');
     dom.btnPin = document.getElementById('btn-pin');
     dom.btnClose = document.getElementById('btn-close');
     dom.btnSettings = document.getElementById('btn-settings');
@@ -170,6 +172,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Event listeners
     dom.btnExport.addEventListener('click', exportSession);
+    dom.btnPause.addEventListener('click', toggleListening);
     dom.btnPin.addEventListener('click', togglePin);
     dom.btnBookmark.addEventListener('click', bookmarkActiveAnswer);
     dom.btnClose.addEventListener('click', () => {
@@ -561,6 +564,29 @@ function togglePin() {
         dom.pinStatus.classList.add('hidden');
         dom.btnPin.classList.remove('active');
         renderTranscript();
+    }
+}
+
+function updatePauseButton(listening) {
+    if (listening) {
+        dom.btnPause.innerHTML = '&#9646;&#9646;'; // ‖ pause icon
+        dom.btnPause.title = 'Pause (Cmd+Shift+Space)';
+        dom.btnPause.classList.remove('active');
+    } else {
+        dom.btnPause.innerHTML = '&#9654;'; // ▶ resume icon
+        dom.btnPause.title = 'Resume (Cmd+Shift+Space)';
+        dom.btnPause.classList.add('active');
+    }
+}
+
+async function toggleListening() {
+    const newListening = !state.listening;
+    try {
+        await sendCommand('set_listening', { listening: newListening });
+        state.listening = newListening;
+        updatePauseButton(state.listening);
+    } catch (err) {
+        console.error('[Pause] Failed to toggle listening:', err);
     }
 }
 
@@ -1236,6 +1262,13 @@ function handleMessage(msg) {
         return;
     }
 
+    // Handle listening state push (e.g., toggled from another client)
+    if (msg.type === 'listening_update') {
+        state.listening = msg.listening;
+        updatePauseButton(state.listening);
+        return;
+    }
+
     // Handle synthesis searching event
     if (msg.type === 'synthesis_searching') {
         state.synthesisSearching = true;
@@ -1310,6 +1343,12 @@ function handleMessage(msg) {
     if (msg.pinned) {
         state.pinnedAnswers = msg.pinned;
         renderPinnedAnswers();
+    }
+
+    // Update listening/pause state
+    if (msg.listening !== undefined) {
+        state.listening = msg.listening;
+        updatePauseButton(state.listening);
     }
 
     // Update synthesis searching state
