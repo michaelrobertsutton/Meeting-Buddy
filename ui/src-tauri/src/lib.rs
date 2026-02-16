@@ -587,36 +587,46 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
-        if let tauri::RunEvent::Exit = event {
-            // Kill the backend sidecar on app exit and wait briefly so it can release the port
-
-            if let Some(state) = app_handle.try_state::<BackendChild>() {
-                if let Some(child) = state.0.lock().unwrap().take() {
-                    log::info!("Killing backend sidecar");
-
-                    let _ = child.kill();
-
-                    std::thread::sleep(std::time::Duration::from_millis(300));
+        match event {
+            tauri::RunEvent::Reopen { .. } | tauri::RunEvent::Resumed => {
+                // Dock click / Cmd+Tab should restore or front the HUD sidecar.
+                // SIGUSR1 maps to HUD "toggle" semantics (front if background, show if hidden).
+                if !signal_hud(app_handle, libc::SIGUSR1) {
+                    spawn_hud_with_deathwatch(app_handle);
                 }
             }
+            tauri::RunEvent::Exit => {
+                // Kill the backend sidecar on app exit and wait briefly so it can release the port
 
-            // Kill settings sidecar on app exit
+                if let Some(state) = app_handle.try_state::<BackendChild>() {
+                    if let Some(child) = state.0.lock().unwrap().take() {
+                        log::info!("Killing backend sidecar");
 
-            if let Some(state) = app_handle.try_state::<SettingsChild>() {
-                if let Some(child) = state.0.lock().unwrap().take() {
-                    let _ = child.kill();
+                        let _ = child.kill();
 
-                    std::thread::sleep(std::time::Duration::from_millis(150));
+                        std::thread::sleep(std::time::Duration::from_millis(300));
+                    }
+                }
+
+                // Kill settings sidecar on app exit
+
+                if let Some(state) = app_handle.try_state::<SettingsChild>() {
+                    if let Some(child) = state.0.lock().unwrap().take() {
+                        let _ = child.kill();
+
+                        std::thread::sleep(std::time::Duration::from_millis(150));
+                    }
+                }
+
+                // Kill HUD sidecar on app exit
+
+                if let Some(state) = app_handle.try_state::<HudChild>() {
+                    if let Some(child) = state.0.lock().unwrap().take() {
+                        let _ = child.kill();
+                    }
                 }
             }
-
-            // Kill HUD sidecar on app exit
-
-            if let Some(state) = app_handle.try_state::<HudChild>() {
-                if let Some(child) = state.0.lock().unwrap().take() {
-                    let _ = child.kill();
-                }
-            }
+            _ => {}
         }
     });
 }
