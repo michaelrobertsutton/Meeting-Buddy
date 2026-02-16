@@ -496,15 +496,15 @@ pub fn run() {
                             }
 
                             if shortcut == &toggle_shortcut {
-                                // Toggle HUD sidecar visibility: hide = kill, show = spawn.
+                                // Alt+Space always brings HUD to front: kill any existing
+                                // instance (buried or visible) and spawn fresh so the new
+                                // window calls makeKeyAndOrderFront and appears on top.
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    let had_child = state.0.lock().unwrap().take();
-                                    if let Some(old_child) = had_child {
+                                    if let Some(old_child) = state.0.lock().unwrap().take() {
                                         let _ = old_child.kill();
-                                    } else if let Err(e) = {
-                                        #[allow(clippy::needless_borrow)]
-                                        spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0)
-                                    } {
+                                    }
+                                    #[allow(clippy::needless_borrow)]
+                                    if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
                                         log::error!("[hud] {e}");
                                     }
                                 }
@@ -556,14 +556,13 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
+                                // Same as Alt+Space: kill-and-respawn to bring to front.
                                 if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    let had_child = state.0.lock().unwrap().take();
-                                    if let Some(old_child) = had_child {
+                                    if let Some(old_child) = state.0.lock().unwrap().take() {
                                         let _ = old_child.kill();
-                                    } else if let Err(e) = {
-                                        #[allow(clippy::needless_borrow)]
-                                        spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0)
-                                    } {
+                                    }
+                                    #[allow(clippy::needless_borrow)]
+                                    if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
                                         log::error!("[hud] {e}");
                                     }
                                 }
