@@ -20,6 +20,7 @@ final class WebSocketClient: ObservableObject {
     @Published var connectionState: ConnectionState = .connecting
     @Published var lastError: String? = nil
     @Published var audioWarning: String? = nil
+    @Published var audioStatus: AudioStatus? = nil
     @Published var lastExportPath: String? = nil
 
     // UI state
@@ -242,6 +243,7 @@ final class WebSocketClient: ObservableObject {
                 }
 
                 if let listening = msg.listening { self.isListening = listening }
+                if let status = msg.audio_status { self.audioStatus = status }
 
                 self.activeQuestion = msg.active_question ?? self.activeQuestion
                 self.oneLiner = msg.active_answer?.one_liner ?? self.oneLiner

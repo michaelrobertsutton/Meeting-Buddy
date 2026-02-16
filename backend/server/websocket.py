@@ -528,4 +528,15 @@ class TranscriptWebSocket(CommandsMixin):
         msg["pinned"] = list(self._pinned_answers)
         # Be defensive: older tests/mocks may not include this attribute.
         msg["listening"] = getattr(self, "_listening", True)
+        # Always include real-time audio capture stats so the HUD can show
+        # audio health without waiting for the 10-second health-check poll.
+        if hasattr(self, "_capture") and self._capture:
+            status = self._capture.get_status()
+            msg["audio_status"] = {
+                "running": status.get("running", False),
+                "frames_received": status.get("frames_received", 0),
+                "non_silent_frames": status.get("non_silent_frames", 0),
+                "receiving_audio": status.get("receiving_audio", False),
+                "receiving_non_silent_audio": status.get("receiving_non_silent_audio", False),
+            }
         return msg
