@@ -286,22 +286,49 @@ class TranscriptWebSocket(CommandsMixin):
                 self._last_audio_check_time = current_time
                 if hasattr(self, '_capture') and self._capture:
                     status = self._capture.get_status()
-                    if not status.get("receiving_audio", False) and status.get("running", False):
-                        # Process is running but no audio received in last 2 seconds
-                        seconds_since = status.get("seconds_since_last_frame", 0)
-                        frames_received = status.get("frames_received", 0)
-                        logger.warning(
-                            "Audio capture health check: Process running but no audio frames received "
-                            "in last %.1f seconds (total frames: %d). "
-                            "Check Screen Recording permission and ensure audio is playing.",
-                            seconds_since,
-                            frames_received
+                    running = status.get("running", False)
+                    exit_code = status.get("exit_code")
+                    frames_received = status.get("frames_received", 0)
+
+                    if not running and exit_code is not None:
+                        # Process exited — likely a permission error
+                        logger.error(
+                            "AudioCapture process exited (code=%d). "
+                            "Check Screen Recording permission in System Settings.",
+                            exit_code,
                         )
-                        # Broadcast warning to clients
+                        await self._broadcast_event({
+                            "type": "audio_error",
+                            "message": (
+                                "Audio capture process stopped (exit code %d). "
+                                "Grant Screen Recording permission in System Settings \u203a Privacy & Security \u203a Screen Recording, "
+                                "then restart the app." % exit_code
+                            ),
+                        })
+                    elif running and frames_received > 50 and not status.get("receiving_non_silent_audio", False):
+                        # Receiving PCM frames but all silence — missing audio permission
+                        logger.warning(
+                            "Audio health check: %d frames received but all silent. "
+                            "Check System Settings \u203a Privacy \u203a Screen & System Audio Recording.",
+                            frames_received,
+                        )
                         await self._broadcast_event({
                             "type": "audio_warning",
-                            "message": "No audio detected. Check Screen Recording permission and ensure audio is playing.",
-                            "status": status,
+                            "message": (
+                                "No audio detected \u2014 check System Settings \u203a Privacy \u203a "
+                                "Screen & System Audio Recording and ensure the toggle for your terminal or app is on."
+                            ),
+                        })
+                    elif running and not status.get("receiving_audio", False):
+                        # Process running but no frames arriving at all
+                        seconds_since = status.get("seconds_since_last_frame", 0)
+                        logger.warning(
+                            "Audio health check: Process running but no frames in last %.1f seconds.",
+                            seconds_since,
+                        )
+                        await self._broadcast_event({
+                            "type": "audio_warning",
+                            "message": "No audio frames received. Check Screen Recording permission and ensure audio is playing.",
                         })
 
             if not transcript_changed and not question_changed:
