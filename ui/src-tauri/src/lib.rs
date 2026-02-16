@@ -619,6 +619,34 @@ pub fn run() {
         .expect("error while building tauri application");
 
     app.run(|app_handle, event| {
+        // Dock icon clicked: send SIGUSR1 to the running HUD so it raises its window
+        // without kill+respawn (which flashes/recreates the window on every click).
+        // Fall back to spawning fresh if the pid file is missing or stale.
+        if let tauri::RunEvent::Reopen { .. } = event {
+            let pid_file = "/tmp/meetingbuddy-hud.pid";
+            let signalled = std::fs::read_to_string(pid_file)
+                .ok()
+                .and_then(|s| s.trim().parse::<u32>().ok())
+                .map(|pid| {
+                    std::process::Command::new("kill")
+                        .args(["-USR1", &pid.to_string()])
+                        .status()
+                        .map(|s| s.success())
+                        .unwrap_or(false)
+                })
+                .unwrap_or(false);
+
+            if !signalled {
+                // HUD not running — spawn fresh.
+                if let Some(state) = app_handle.try_state::<HudChild>() {
+                    #[allow(clippy::needless_borrow)]
+                    if let Err(e) = spawn_sidecar(&app_handle, "MeetingBuddyHUD", &state.0) {
+                        log::error!("[hud] reopen spawn: {e}");
+                    }
+                }
+            }
+        }
+
         if let tauri::RunEvent::Exit = event {
             // Kill the backend sidecar on app exit and wait briefly so it can release the port
 
