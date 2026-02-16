@@ -14,6 +14,7 @@
 //   cd audio-capture && swift build -c release
 
 import AVFoundation
+import CoreGraphics
 import Foundation
 import ScreenCaptureKit
 
@@ -70,6 +71,16 @@ final class SCStreamRecorder: NSObject, SCStreamDelegate, SCStreamOutput {
     // ---------------------------------------------------------------------------
 
     func start() async throws {
+        // Check Screen Recording permission before calling any SCKit API.
+        // CGPreflightScreenCaptureAccess() returns true if already granted,
+        // avoiding the macOS system dialog that SCShareableContent triggers when
+        // the permission has not yet been approved.
+        guard CGPreflightScreenCaptureAccess() else {
+            log("[AudioCapture] ERROR: Screen Recording permission not granted.")
+            log("[AudioCapture] Open System Settings > Privacy & Security > Screen & System Audio Recording and enable Meeting Buddy.")
+            exit(1)
+        }
+
         log("[AudioCapture] requesting shareable content...")
         let content = try await SCShareableContent.excludingDesktopWindows(false, onScreenWindowsOnly: false)
 
