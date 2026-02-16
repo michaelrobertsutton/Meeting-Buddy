@@ -482,7 +482,7 @@ pub fn run() {
                 };
 
                 let toggle_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
-
+                let focus_shortcut = Shortcut::new(Some(Modifiers::META), Code::KeyK);
 
                 let app_handle = app.handle().clone();
 
@@ -508,7 +508,11 @@ pub fn run() {
                                         log::error!("[hud] {e}");
                                     }
                                 }
-
+                            } else if shortcut == &focus_shortcut {
+                                // Cmd+K: focus the question input in all webview windows
+                                for window in app_handle.webview_windows().values() {
+                                    let _ = window.emit("focus-question", ());
+                                }
                             }
 
                         })
@@ -518,6 +522,7 @@ pub fn run() {
                 )?;
 
                 app.global_shortcut().register(toggle_shortcut)?;
+                app.global_shortcut().register(focus_shortcut)?;
 
             }
 
