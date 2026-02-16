@@ -34,6 +34,12 @@ npm run tauri build 2>&1
 echo "==> Killing running instance (if any)…"
 osascript -e 'quit app "Meeting Buddy"' 2>/dev/null || true
 killall "Meeting Buddy" 2>/dev/null || true
+# Sidecars can survive if the host exits unexpectedly; kill them explicitly.
+killall "MeetingBuddyHUD" 2>/dev/null || true
+killall "MeetingBuddySettings" 2>/dev/null || true
+# Also kill any debug/dev sidecar processes from local builds.
+pkill -f "/MeetingBuddyHUD" 2>/dev/null || true
+pkill -f "/MeetingBuddySettings" 2>/dev/null || true
 sleep 2
 
 echo "==> Installing to /Applications…"

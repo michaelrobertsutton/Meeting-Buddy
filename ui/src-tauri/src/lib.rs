@@ -590,8 +590,8 @@ pub fn run() {
         match event {
             tauri::RunEvent::Reopen { .. } | tauri::RunEvent::Resumed => {
                 // Dock click / Cmd+Tab should restore or front the HUD sidecar.
-                // SIGUSR1 maps to HUD "toggle" semantics (front if background, show if hidden).
-                if !signal_hud(app_handle, libc::SIGUSR1) {
+                // Use SIGWINCH to avoid toggle semantics that can hide/fight focus.
+                if !signal_hud(app_handle, libc::SIGWINCH) {
                     spawn_hud_with_deathwatch(app_handle);
                 }
             }
