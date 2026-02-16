@@ -43,6 +43,21 @@ Meeting Buddy requires **Screen Recording** (and optionally Microphone) on macOS
 - **README:** Prerequisites section describes Screen Recording and points to Settings → Permissions.
 
 When adding or changing permission requirements, update both the Settings Permissions view and the README.
+Prefer runtime capture truth (`get_audio_status`) for Screen Recording state instead of helper-process-only checks.
+
+## HUD control contract (required)
+
+User-facing HUD/window actions must go through the explicit command contract:
+- `toggle_hud`
+- `hide_hud`
+- `restore_hud`
+- `open_settings`
+
+Do not introduce or reintroduce Unix signal-driven UX control for these actions.
+If you change this contract, update:
+- `ui/src-tauri/src/lib.rs`
+- `native/MeetingBuddyHUD/Sources/MeetingBuddyHUD/HudCommandServer.swift`
+- relevant docs (`README.md`, `RELEASE_CHECKLIST.md`)
 
 ## CI policy (personal repo)
 
@@ -128,6 +143,8 @@ Some files are likely to be edited by multiple issues (e.g., WebSocket protocol,
 Known hot files:
 - `backend/server/websocket.py` — touched by many issues; check phase labels for serial ordering
 - `ui/src-tauri/src/lib.rs` — sidecar spawn logic, hotkeys, tray menu
+- `native/MeetingBuddyHUD/Sources/MeetingBuddyHUD/MeetingBuddyHUDApp.swift` — HUD focus/lifecycle behavior
+- `native/MeetingBuddyHUD/Sources/MeetingBuddyHUD/SettingsLauncher.swift` — Settings process identity + launch semantics
 
 ## Review feedback discipline (required)
 

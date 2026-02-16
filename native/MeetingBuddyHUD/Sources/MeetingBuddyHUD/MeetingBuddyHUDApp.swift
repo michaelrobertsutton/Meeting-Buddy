@@ -5,6 +5,7 @@ extension Notification.Name {
     static let meetingBuddyHUDHide = Notification.Name("MeetingBuddyHUD.Hide")
     /// Sent by the toolbar pin button to toggle the window's always-on-top state.
     static let meetingBuddyHUDToggleWindowPin = Notification.Name("MeetingBuddyHUD.ToggleWindowPin")
+    static let meetingBuddyHUDOpenSettings = Notification.Name("MeetingBuddyHUD.OpenSettings")
 }
 
 @main
@@ -31,13 +32,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let ws = WebSocketClient()
     private let hudController = HUDPanelController()
     private var hotkey: GlobalHotkey?
-    private var settingsHotkeyGlobalMonitor: Any?
     private var settingsHotkeyLocalMonitor: Any?
     private var hideObserver: NSObjectProtocol?
     private var windowPinObserver: NSObjectProtocol?
-    private var toggleSignalSource: DispatchSourceSignal?
-    private var hideSignalSource: DispatchSourceSignal?
-    private var restoreSignalSource: DispatchSourceSignal?
+    private var openSettingsObserver: NSObjectProtocol?
+    private var commandServer: HudCommandServer?
 
     private func persistedFloatingState() -> Bool {
         if UserDefaults.standard.object(forKey: HUDPanelController.windowFloatingKey) == nil {
@@ -82,6 +81,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(newState, forKey: HUDPanelController.windowFloatingKey)
         }
 
+        openSettingsObserver = NotificationCenter.default.addObserver(
+            forName: .meetingBuddyHUDOpenSettings,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.openSettings()
+        }
+
         // Register global hotkey (Alt+Space) only when Accessibility is already granted.
         // Avoid triggering the macOS permission prompt on every app launch.
         let accessibilityGranted = AXIsProcessTrusted()
@@ -92,39 +99,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotkey?.register()
         }
 
-        // Listen for Unix signals from the Tauri tray host.
-        // SIGUSR1 = toggle panel, SIGUSR2 = hide panel, SIGWINCH = restore/front panel.
-        signal(SIGUSR1, SIG_IGN)
-        toggleSignalSource = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
-        toggleSignalSource?.setEventHandler { [weak self] in
-            self?.toggleHUD()
+        commandServer = HudCommandServer { [weak self] command in
+            self?.handleExternalCommand(command)
         }
-        toggleSignalSource?.resume()
+        commandServer?.start()
 
-        signal(SIGUSR2, SIG_IGN)
-        hideSignalSource = DispatchSource.makeSignalSource(signal: SIGUSR2, queue: .main)
-        hideSignalSource?.setEventHandler { [weak self] in
-            self?.hudController.hide()
-        }
-        hideSignalSource?.resume()
-
-        signal(SIGWINCH, SIG_IGN)
-        restoreSignalSource = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
-        restoreSignalSource?.setEventHandler { [weak self] in
-            self?.restoreHUD()
-        }
-        restoreSignalSource?.resume()
-
-        // Cmd+, opens Settings (same as gear button)
-        // Note: Global monitors do NOT receive events when this app is active.
-        // Also, keyCode is layout-dependent; prefer charactersIgnoringModifiers.
-        settingsHotkeyGlobalMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            self?.handleSettingsHotkey(event)
-        }
+        // Cmd+, opens Settings when this app is active.
         settingsHotkeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyDown(event) ?? event
         }
-
     }
 
     // Re-show HUD when user clicks dock icon or re-opens the app.
@@ -151,19 +134,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let observer = windowPinObserver {
             NotificationCenter.default.removeObserver(observer)
         }
-        hotkey?.unregister()
-        toggleSignalSource?.cancel()
-        hideSignalSource?.cancel()
-        restoreSignalSource?.cancel()
-        if let monitor = settingsHotkeyGlobalMonitor {
-            NSEvent.removeMonitor(monitor)
-            settingsHotkeyGlobalMonitor = nil
+        if let observer = openSettingsObserver {
+            NotificationCenter.default.removeObserver(observer)
         }
+        hotkey?.unregister()
+        commandServer?.stop()
+        commandServer = nil
         if let monitor = settingsHotkeyLocalMonitor {
             NSEvent.removeMonitor(monitor)
             settingsHotkeyLocalMonitor = nil
         }
         ws.disconnect()
+    }
+
+    private func handleExternalCommand(_ command: HudIPCCommand) {
+        switch command {
+        case .toggleHUD:
+            toggleHUD()
+        case .hideHUD:
+            hudController.hide()
+        case .restoreHUD:
+            restoreHUD(externalRequest: true)
+        case .openSettings:
+            openSettings()
+        }
     }
 
     /// Handle key down; return nil to consume the event, or the event to pass through.
@@ -188,25 +182,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return nil
         }
         if chars == "," {
-            DispatchQueue.main.async {
-                self.hudController.hide()
-                try? SettingsLauncher.launch()
+            DispatchQueue.main.async { [weak self] in
+                self?.openSettings()
             }
             return nil
         }
         return event
     }
 
-    private func handleSettingsHotkey(_ event: NSEvent) {
-        // Global monitor fires when another app is active — only handle Cmd+,
-        // (open settings). Never handle Cmd+H here: that would hide the HUD
-        // every time the user presses Cmd+H in Safari, Finder, etc.
-        guard event.modifierFlags.contains(.command),
-              let chars = event.charactersIgnoringModifiers,
-              chars == "," else { return }
-        DispatchQueue.main.async {
-            self.hudController.hide()
-            try? SettingsLauncher.launch()
+    private func openSettings() {
+        do {
+            try SettingsLauncher.launch()
+            hudController.hide()
+        } catch {
+            ws.lastError = error.localizedDescription
         }
     }
 
@@ -226,7 +215,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func restoreHUD() {
+    private func restoreHUD(externalRequest: Bool = false) {
+        if externalRequest && SettingsLauncher.isSettingsFrontmost() {
+            return
+        }
+
         let floating = persistedFloatingState()
         if hudController.isVisible {
             hudController.orderFront()

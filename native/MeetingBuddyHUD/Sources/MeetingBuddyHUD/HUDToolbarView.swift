@@ -93,15 +93,7 @@ struct HUDToolbarView: View {
                         help: "Settings",
                         hovering: $hoveringSettings
                     ) {
-                        do {
-                            NotificationCenter.default.post(name: .meetingBuddyHUDHide, object: nil)
-                            print("[Settings] gear clicked, launching...")
-                            try SettingsLauncher.launch()
-                            print("[Settings] launch() returned OK")
-                        } catch {
-                            print("[Settings] launch() threw: \(error)")
-                            ws.lastError = error.localizedDescription
-                        }
+                        NotificationCenter.default.post(name: .meetingBuddyHUDOpenSettings, object: nil)
                     }
 
                     toolbarButton(
