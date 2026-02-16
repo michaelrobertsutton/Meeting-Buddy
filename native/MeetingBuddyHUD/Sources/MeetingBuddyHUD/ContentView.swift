@@ -14,7 +14,7 @@ struct ContentView: View {
             // Main content area — single continuous material (no inner rounded box; avoids double-corner/notch)
             VStack(spacing: AppTheme.spacing) {
                 // Transcript section — tap a segment to set it as the active question
-                TranscriptView(segments: ws.segments, lastSegmentAt: ws.lastTranscriptAt) { text in
+                TranscriptView(segments: ws.segments, lastSegmentAt: ws.lastTranscriptAt, isListening: ws.isListening) { text in
                     Task { await ws.setQuestion(text) }
                 }
 
