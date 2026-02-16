@@ -142,6 +142,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Handle key down; return nil to consume the event, or the event to pass through.
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
+        // Alt+Space toggle — must check before the .command guard
+        if event.keyCode == 49 && event.modifierFlags.contains(.option)
+            && !event.modifierFlags.contains(.command) {
+            DispatchQueue.main.async { [weak self] in
+                self?.toggleHUD()
+            }
+            return nil
+        }
+
         guard event.modifierFlags.contains(.command) else { return event }
         guard let chars = event.charactersIgnoringModifiers else { return event }
 

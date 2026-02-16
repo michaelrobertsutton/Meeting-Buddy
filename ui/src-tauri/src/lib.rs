@@ -456,55 +456,6 @@ pub fn run() {
             // Spawn native HUD sidecar on startup with death-watch.
             spawn_hud_with_deathwatch(app.handle());
 
-            #[cfg(desktop)]
-            {
-                use tauri_plugin_global_shortcut::{
-                    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
-
-                };
-
-                let toggle_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
-                let focus_shortcut = Shortcut::new(Some(Modifiers::META), Code::KeyK);
-
-                let app_handle = app.handle().clone();
-
-                app.handle().plugin(
-
-                    tauri_plugin_global_shortcut::Builder::new()
-
-                        .with_handler(move |_app, shortcut, event| {
-                            if event.state() != ShortcutState::Pressed {
-                                return;
-                            }
-
-                            if shortcut == &toggle_shortcut {
-                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
-                                    *flag.0.lock().unwrap() = true;
-                                }
-                                if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
-                                        let _ = old_child.kill();
-                                    }
-                                }
-                                spawn_hud_with_deathwatch(&app_handle);
-                            } else if shortcut == &focus_shortcut {
-                                // Cmd+K: focus the question input in all webview windows
-                                for window in app_handle.webview_windows().values() {
-                                    let _ = window.emit("focus-question", ());
-                                }
-                            }
-
-                        })
-
-                        .build(),
-
-                )?;
-
-                app.global_shortcut().register(toggle_shortcut)?;
-                app.global_shortcut().register(focus_shortcut)?;
-
-            }
-
             // --- Menu bar tray icon (Issue #101) ---
 
             #[cfg(desktop)]
@@ -540,15 +491,25 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
-                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
-                                    *flag.0.lock().unwrap() = true;
-                                }
-                                if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
-                                        let _ = old_child.kill();
+                                let hud_alive = app_handle
+                                    .try_state::<HudChild>()
+                                    .map(|s| s.0.lock().unwrap().is_some())
+                                    .unwrap_or(false);
+
+                                if hud_alive {
+                                    // HUD is running — kill it (hide)
+                                    if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
+                                        *flag.0.lock().unwrap() = true;
                                     }
+                                    if let Some(state) = app_handle.try_state::<HudChild>() {
+                                        if let Some(child) = state.0.lock().unwrap().take() {
+                                            let _ = child.kill();
+                                        }
+                                    }
+                                } else {
+                                    // HUD is not running — spawn it (show)
+                                    spawn_hud_with_deathwatch(&app_handle);
                                 }
-                                spawn_hud_with_deathwatch(&app_handle);
                             }
                             "open_settings" => {
                                 if let Err(e) = open_settings_window(app_handle.clone()) {
