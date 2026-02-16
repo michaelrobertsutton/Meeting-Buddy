@@ -9,12 +9,43 @@ use tauri_plugin_shell::ShellExt;
 /// Holds the settings sidecar child process so we can kill it before re-launching.
 struct SettingsChild(Mutex<Option<CommandChild>>);
 
-/// Holds the native HUD sidecar child process so we can kill it to hide.
+/// Holds the native HUD sidecar child process.
+/// The process stays resident; we signal it to toggle/hide rather than killing it.
 struct HudChild(Mutex<Option<CommandChild>>);
 
-/// Flag set to `true` before intentionally killing the HUD (toggle/hide/quit).
+/// Flag set to `true` before intentionally killing the HUD (quit only).
 /// The death-watch task checks this: if set, clears it and does NOT quit Tauri.
 struct HudIntentionalKill(Mutex<bool>);
+
+/// Send a Unix signal to the HUD process. Returns true if signal was sent.
+#[cfg(target_os = "macos")]
+fn signal_hud(app: &tauri::AppHandle, sig: libc::c_int) -> bool {
+    if let Some(state) = app.try_state::<HudChild>() {
+        if let Some(ref child) = *state.0.lock().unwrap() {
+            let pid = child.pid() as libc::pid_t;
+            let ret = unsafe { libc::kill(pid, sig) };
+            if ret == 0 {
+                return true;
+            }
+            let errno = std::io::Error::last_os_error().raw_os_error();
+            if errno == Some(libc::ESRCH) {
+                // The child is gone; clear stale PID state so caller can respawn safely.
+                if let Some(state) = app.try_state::<HudChild>() {
+                    let mut guard = state.0.lock().unwrap();
+                    let matches_pid = guard
+                        .as_ref()
+                        .map(|current| current.pid() as libc::pid_t == pid)
+                        .unwrap_or(false);
+                    if matches_pid {
+                        *guard = None;
+                    }
+                }
+            }
+            log::warn!("[hud] signal {sig} to pid {pid} failed (errno={errno:?})");
+        }
+    }
+    false
+}
 
 /// Holds the backend sidecar child process so we can kill it on app exit.
 struct BackendChild(Mutex<Option<CommandChild>>);
@@ -43,6 +74,7 @@ fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
     match app.shell().sidecar("MeetingBuddyHUD") {
         Ok(cmd) => match cmd.spawn() {
             Ok((mut rx, child)) => {
+                let hud_pid = child.pid();
                 if let Some(state) = app.try_state::<HudChild>() {
                     *state.0.lock().unwrap() = Some(child);
                 }
@@ -51,6 +83,18 @@ fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
                     use tauri_plugin_shell::process::CommandEvent;
                     while let Some(ev) = rx.recv().await {
                         if let CommandEvent::Terminated(_) = ev {
+                            if let Some(state) = h.try_state::<HudChild>() {
+                                let mut guard = state.0.lock().unwrap();
+                                let should_clear = guard
+                                    .as_ref()
+                                    .map(|current| current.pid() == hud_pid)
+                                    .unwrap_or(false);
+                                if should_clear {
+                                    // Only clear if this watcher owns the current child.
+                                    // This avoids clobbering a newer HUD spawned after a crash.
+                                    *guard = None;
+                                }
+                            }
                             if let Some(flag) = h.try_state::<HudIntentionalKill>() {
                                 let mut f = flag.0.lock().unwrap();
                                 if *f { *f = false; break; }
@@ -456,55 +500,6 @@ pub fn run() {
             // Spawn native HUD sidecar on startup with death-watch.
             spawn_hud_with_deathwatch(app.handle());
 
-            #[cfg(desktop)]
-            {
-                use tauri_plugin_global_shortcut::{
-                    Code, GlobalShortcutExt, Modifiers, Shortcut, ShortcutState,
-
-                };
-
-                let toggle_shortcut = Shortcut::new(Some(Modifiers::ALT), Code::Space);
-                let focus_shortcut = Shortcut::new(Some(Modifiers::META), Code::KeyK);
-
-                let app_handle = app.handle().clone();
-
-                app.handle().plugin(
-
-                    tauri_plugin_global_shortcut::Builder::new()
-
-                        .with_handler(move |_app, shortcut, event| {
-                            if event.state() != ShortcutState::Pressed {
-                                return;
-                            }
-
-                            if shortcut == &toggle_shortcut {
-                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
-                                    *flag.0.lock().unwrap() = true;
-                                }
-                                if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
-                                        let _ = old_child.kill();
-                                    }
-                                }
-                                spawn_hud_with_deathwatch(&app_handle);
-                            } else if shortcut == &focus_shortcut {
-                                // Cmd+K: focus the question input in all webview windows
-                                for window in app_handle.webview_windows().values() {
-                                    let _ = window.emit("focus-question", ());
-                                }
-                            }
-
-                        })
-
-                        .build(),
-
-                )?;
-
-                app.global_shortcut().register(toggle_shortcut)?;
-                app.global_shortcut().register(focus_shortcut)?;
-
-            }
-
             // --- Menu bar tray icon (Issue #101) ---
 
             #[cfg(desktop)]
@@ -540,15 +535,10 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
-                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
-                                    *flag.0.lock().unwrap() = true;
+                                // Signal HUD to toggle; if process is dead, respawn it.
+                                if !signal_hud(&app_handle, libc::SIGUSR1) {
+                                    spawn_hud_with_deathwatch(&app_handle);
                                 }
-                                if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(old_child) = state.0.lock().unwrap().take() {
-                                        let _ = old_child.kill();
-                                    }
-                                }
-                                spawn_hud_with_deathwatch(&app_handle);
                             }
                             "open_settings" => {
                                 if let Err(e) = open_settings_window(app_handle.clone()) {
@@ -557,14 +547,8 @@ pub fn run() {
                             }
 
                             "hide_hud" => {
-                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
-                                    *flag.0.lock().unwrap() = true;
-                                }
-                                if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(child) = state.0.lock().unwrap().take() {
-                                        let _ = child.kill();
-                                    }
-                                }
+                                // Signal HUD to hide (panel only; process stays resident).
+                                signal_hud(&app_handle, libc::SIGUSR2);
                             }
 
                             "export" => {

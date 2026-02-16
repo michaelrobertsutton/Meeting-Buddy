@@ -35,6 +35,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsHotkeyLocalMonitor: Any?
     private var hideObserver: NSObjectProtocol?
     private var windowPinObserver: NSObjectProtocol?
+    private var toggleSignalSource: DispatchSourceSignal?
+    private var hideSignalSource: DispatchSourceSignal?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Best-effort backend launch (no-op if backend already running or sidecar not found)
@@ -87,6 +89,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hotkey?.register()
         }
 
+        // Listen for Unix signals from the Tauri tray host.
+        // SIGUSR1 = toggle panel, SIGUSR2 = hide panel.
+        signal(SIGUSR1, SIG_IGN)
+        toggleSignalSource = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
+        toggleSignalSource?.setEventHandler { [weak self] in
+            self?.toggleHUD()
+        }
+        toggleSignalSource?.resume()
+
+        signal(SIGUSR2, SIG_IGN)
+        hideSignalSource = DispatchSource.makeSignalSource(signal: SIGUSR2, queue: .main)
+        hideSignalSource?.setEventHandler { [weak self] in
+            self?.hudController.hide()
+        }
+        hideSignalSource?.resume()
+
         // Cmd+, opens Settings (same as gear button)
         // Note: Global monitors do NOT receive events when this app is active.
         // Also, keyCode is layout-dependent; prefer charactersIgnoringModifiers.
@@ -129,6 +147,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             NotificationCenter.default.removeObserver(observer)
         }
         hotkey?.unregister()
+        toggleSignalSource?.cancel()
+        hideSignalSource?.cancel()
         if let monitor = settingsHotkeyGlobalMonitor {
             NSEvent.removeMonitor(monitor)
             settingsHotkeyGlobalMonitor = nil
@@ -142,6 +162,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Handle key down; return nil to consume the event, or the event to pass through.
     private func handleKeyDown(_ event: NSEvent) -> NSEvent? {
+        // Alt+Space toggle — must check before the .command guard
+        if event.keyCode == 49 && event.modifierFlags.contains(.option)
+            && !event.modifierFlags.contains(.command) {
+            DispatchQueue.main.async { [weak self] in
+                self?.toggleHUD()
+            }
+            return nil
+        }
+
         guard event.modifierFlags.contains(.command) else { return event }
         guard let chars = event.charactersIgnoringModifiers else { return event }
 
