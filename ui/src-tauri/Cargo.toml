@@ -23,6 +23,7 @@ tauri = { version = "2.10.0", features = ["tray-icon", "macos-private-api"] }
 tauri-plugin-log = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-shell = "2"
+libc = "0.2"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 window-vibrancy = "0.7"

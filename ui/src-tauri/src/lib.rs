@@ -9,12 +9,29 @@ use tauri_plugin_shell::ShellExt;
 /// Holds the settings sidecar child process so we can kill it before re-launching.
 struct SettingsChild(Mutex<Option<CommandChild>>);
 
-/// Holds the native HUD sidecar child process so we can kill it to hide.
+/// Holds the native HUD sidecar child process.
+/// The process stays resident; we signal it to toggle/hide rather than killing it.
 struct HudChild(Mutex<Option<CommandChild>>);
 
-/// Flag set to `true` before intentionally killing the HUD (toggle/hide/quit).
+/// Flag set to `true` before intentionally killing the HUD (quit only).
 /// The death-watch task checks this: if set, clears it and does NOT quit Tauri.
 struct HudIntentionalKill(Mutex<bool>);
+
+/// Send a Unix signal to the HUD process. Returns true if signal was sent.
+#[cfg(target_os = "macos")]
+fn signal_hud(app: &tauri::AppHandle, sig: libc::c_int) -> bool {
+    if let Some(state) = app.try_state::<HudChild>() {
+        if let Some(ref child) = *state.0.lock().unwrap() {
+            let pid = child.pid() as libc::pid_t;
+            let ret = unsafe { libc::kill(pid, sig) };
+            if ret == 0 {
+                return true;
+            }
+            log::warn!("[hud] signal {sig} to pid {pid} failed: {ret}");
+        }
+    }
+    false
+}
 
 /// Holds the backend sidecar child process so we can kill it on app exit.
 struct BackendChild(Mutex<Option<CommandChild>>);
@@ -491,23 +508,8 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
-                                let hud_alive = app_handle
-                                    .try_state::<HudChild>()
-                                    .map(|s| s.0.lock().unwrap().is_some())
-                                    .unwrap_or(false);
-
-                                if hud_alive {
-                                    // HUD is running — kill it (hide)
-                                    if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
-                                        *flag.0.lock().unwrap() = true;
-                                    }
-                                    if let Some(state) = app_handle.try_state::<HudChild>() {
-                                        if let Some(child) = state.0.lock().unwrap().take() {
-                                            let _ = child.kill();
-                                        }
-                                    }
-                                } else {
-                                    // HUD is not running — spawn it (show)
+                                // Signal HUD to toggle; if process is dead, respawn it.
+                                if !signal_hud(&app_handle, libc::SIGUSR1) {
                                     spawn_hud_with_deathwatch(&app_handle);
                                 }
                             }
@@ -518,14 +520,8 @@ pub fn run() {
                             }
 
                             "hide_hud" => {
-                                if let Some(flag) = app_handle.try_state::<HudIntentionalKill>() {
-                                    *flag.0.lock().unwrap() = true;
-                                }
-                                if let Some(state) = app_handle.try_state::<HudChild>() {
-                                    if let Some(child) = state.0.lock().unwrap().take() {
-                                        let _ = child.kill();
-                                    }
-                                }
+                                // Signal HUD to hide (panel only; process stays resident).
+                                signal_hud(&app_handle, libc::SIGUSR2);
                             }
 
                             "export" => {
