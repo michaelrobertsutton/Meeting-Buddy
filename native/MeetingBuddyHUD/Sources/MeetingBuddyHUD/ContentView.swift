@@ -46,6 +46,32 @@ struct ContentView: View {
 
             Spacer(minLength: 0)
 
+            // Audio warning banner — self-healing: cleared automatically when transcript arrives
+            if let warn = ws.audioWarning, !warn.isEmpty {
+                HStack(spacing: 8) {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.caption)
+                        .foregroundStyle(Color(hex: "#FFA726"))
+                    Text(warn)
+                        .font(.caption)
+                        .foregroundStyle(Color(hex: "#FFA726"))
+                        .lineLimit(2)
+                    Spacer(minLength: 0)
+                    Button {
+                        ws.audioWarning = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.caption2)
+                            .foregroundStyle(Color.white.opacity(0.60))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color(hex: "#FFA726").opacity(0.15))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+
             // Error banner — slides in above footer when an error is active (#239)
             if let err = ws.lastError, !err.isEmpty {
                 HStack(spacing: 8) {
@@ -87,5 +113,6 @@ struct ContentView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .fontDesign(.rounded)
         .animation(.easeInOut(duration: 0.25), value: ws.lastError)
+        .animation(.easeInOut(duration: 0.25), value: ws.audioWarning)
     }
 }
