@@ -81,14 +81,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(newState, forKey: HUDPanelController.windowFloatingKey)
         }
 
-        // Register global hotkey (Alt+Space) to toggle HUD.
-        // Check permission without prompting first; only show the system dialog if not yet granted.
+        // Register global hotkey (Alt+Space) only when Accessibility is already granted.
+        // Avoid triggering the macOS permission prompt on every app launch.
         let accessibilityGranted = AXIsProcessTrusted()
-        if !accessibilityGranted {
-            AXIsProcessTrustedWithOptions(
-                [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
-            )
-        }
         if accessibilityGranted {
             hotkey = GlobalHotkey { [weak self] in
                 self?.toggleHUD()
