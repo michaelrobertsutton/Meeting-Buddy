@@ -28,6 +28,8 @@ struct MeetingBuddyHUDApp: App {
 }
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private static let hostBundleIdentifier = "com.meetingbuddy.overlay"
+
     private let ws = WebSocketClient()
     private let hudController = HUDPanelController()
     private var hotkey: GlobalHotkey?
@@ -35,6 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var settingsHotkeyLocalMonitor: Any?
     private var hideObserver: NSObjectProtocol?
     private var windowPinObserver: NSObjectProtocol?
+    private var hostActivationObserver: NSObjectProtocol?
     private var toggleSignalSource: DispatchSourceSignal?
     private var hideSignalSource: DispatchSourceSignal?
 
@@ -116,6 +119,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsHotkeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyDown(event) ?? event
         }
+
+        // Cmd+Tab activates the host Tauri app (not this HUD sidecar).
+        // Mirror that activation by bringing the HUD to the front.
+        hostActivationObserver = NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didActivateApplicationNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self else { return }
+            guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
+            guard app.bundleIdentifier == Self.hostBundleIdentifier else { return }
+            if self.hudController.isVisible {
+                self.hudController.orderFront()
+            } else {
+                let floating = self.persistedFloatingState()
+                self.hudController.show(initialFloating: floating) { ContentView(ws: self.ws) }
+                self.ws.isWindowFloating = floating
+            }
+        }
     }
 
     // Re-show HUD when user clicks dock icon or re-opens the app.
@@ -147,6 +169,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if let observer = windowPinObserver {
             NotificationCenter.default.removeObserver(observer)
+        }
+        if let observer = hostActivationObserver {
+            NSWorkspace.shared.notificationCenter.removeObserver(observer)
+            hostActivationObserver = nil
         }
         hotkey?.unregister()
         toggleSignalSource?.cancel()
