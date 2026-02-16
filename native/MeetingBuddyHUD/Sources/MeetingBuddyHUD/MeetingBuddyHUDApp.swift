@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var hostActivationObserver: NSObjectProtocol?
     private var toggleSignalSource: DispatchSourceSignal?
     private var hideSignalSource: DispatchSourceSignal?
+    private var restoreSignalSource: DispatchSourceSignal?
 
     private func persistedFloatingState() -> Bool {
         if UserDefaults.standard.object(forKey: HUDPanelController.windowFloatingKey) == nil {
@@ -95,7 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Listen for Unix signals from the Tauri tray host.
-        // SIGUSR1 = toggle panel, SIGUSR2 = hide panel.
+        // SIGUSR1 = toggle panel, SIGUSR2 = hide panel, SIGWINCH = restore/front panel.
         signal(SIGUSR1, SIG_IGN)
         toggleSignalSource = DispatchSource.makeSignalSource(signal: SIGUSR1, queue: .main)
         toggleSignalSource?.setEventHandler { [weak self] in
@@ -109,6 +110,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.hudController.hide()
         }
         hideSignalSource?.resume()
+
+        signal(SIGWINCH, SIG_IGN)
+        restoreSignalSource = DispatchSource.makeSignalSource(signal: SIGWINCH, queue: .main)
+        restoreSignalSource?.setEventHandler { [weak self] in
+            self?.restoreHUD()
+        }
+        restoreSignalSource?.resume()
 
         // Cmd+, opens Settings (same as gear button)
         // Note: Global monitors do NOT receive events when this app is active.
@@ -130,13 +138,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             guard let self else { return }
             guard let app = note.userInfo?[NSWorkspace.applicationUserInfoKey] as? NSRunningApplication else { return }
             guard app.bundleIdentifier == Self.hostBundleIdentifier else { return }
-            if self.hudController.isVisible {
-                self.hudController.orderFront()
-            } else {
-                let floating = self.persistedFloatingState()
-                self.hudController.show(initialFloating: floating) { ContentView(ws: self.ws) }
-                self.ws.isWindowFloating = floating
-            }
+            self.restoreHUD()
         }
     }
 
@@ -154,13 +156,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Called when the user Cmd+Tabs to us or clicks the dock icon.
     func applicationDidBecomeActive(_ notification: Notification) {
-        let floating = persistedFloatingState()
-        if hudController.isVisible {
-            hudController.orderFront()
-        } else {
-            hudController.show(initialFloating: floating) { ContentView(ws: self.ws) }
-            ws.isWindowFloating = floating
-        }
+        restoreHUD()
     }
 
     func applicationWillTerminate(_ notification: Notification) {
@@ -177,6 +173,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         hotkey?.unregister()
         toggleSignalSource?.cancel()
         hideSignalSource?.cancel()
+        restoreSignalSource?.cancel()
         if let monitor = settingsHotkeyGlobalMonitor {
             NSEvent.removeMonitor(monitor)
             settingsHotkeyGlobalMonitor = nil
@@ -242,6 +239,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             hudController.show(initialFloating: floating) {
                 ContentView(ws: ws)
             }
+            ws.isWindowFloating = floating
+        }
+    }
+
+    private func restoreHUD() {
+        let floating = persistedFloatingState()
+        if hudController.isVisible {
+            hudController.orderFront()
+        } else {
+            hudController.show(initialFloating: floating) { ContentView(ws: self.ws) }
             ws.isWindowFloating = floating
         }
     }
