@@ -19,7 +19,9 @@ final class HUDPanel: NSPanel {
 
         // Window level set by setFloating(_:) (default: unpinned / .normal)
         level = .normal
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        // participatesInCycle lets Mission Control show this window even when not pinned,
+        // so users can Alt+Tab / Exposé back to it without needing to use the tray menu.
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .participatesInCycle]
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
 
@@ -96,6 +98,8 @@ final class HUDPanelController {
             hostingView?.rootView = rootView
         }
 
+        // Activate the app so the panel can steal focus from other apps.
+        NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
 
         // Ensure hosting view fills panel after first layout (fixes blank content when bounds were zero)
