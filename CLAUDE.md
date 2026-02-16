@@ -58,6 +58,28 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 - **SCK reader thread**: reads PCM from Swift subprocess stdout pipe
 - **ASR background thread**: runs VAD + Whisper transcription
 
+### Phase K — Three-Layer Response & Speculative Retrieval
+
+#### Three-layer response (`SynthesisResult`)
+`SynthesisEngine` now produces a compounded three-layer answer:
+
+| Layer | Field | Description |
+|-------|-------|-------------|
+| 1 | `bullets` | Direct evidence answers drawn from retrieved documents |
+| 2 | `process_bullets` | Execution context — how to do it, steps, gotchas |
+| 3 | `best_practice_bullets` | General best-practice guidance inferred from the corpus |
+
+Additional fields: `one_liner` (single-sentence summary), `next_step` (follow-up action), `clarifiers` (questions to ask), `citations`, `confidence`, `inferred`, `reasoning`.
+
+#### Speculative retrieval prefetching
+`TranscriptWebSocket` in `backend/server/websocket.py` prefetches RAG results ahead of confirmed question changes:
+
+- `_speculative_task` — asyncio Task running a background retrieval for the candidate question
+- `_speculative_question` — the question that was speculatively fetched
+- `_speculative_chunks` — retrieved chunks ready to be consumed when the question is confirmed
+
+When a synthesis call fires and the confirmed question matches `_speculative_question`, the prefetched `_speculative_chunks` are passed directly to `SynthesisEngine.synthesize_stream()` as `prefetched_chunks`, skipping the retrieval step and reducing end-to-end latency.
+
 ### Key Files
 | File | Purpose |
 |------|---------|
@@ -67,7 +89,7 @@ System Audio → AudioCapture (Swift) → stdout pipe → SCKCapture (Python)
 | `backend/audio/sck_capture.py` | ScreenCaptureKit bridge (spawns Swift binary) |
 | `backend/asr/streaming.py` | VAD → ASR state machine |
 | `backend/question/extractor.py` | Heuristic active question detection |
-| `backend/synthesis/engine.py` | LLM synthesis (API key or OAuth modes, streaming) |
+| `backend/synthesis/engine.py` | LLM synthesis (API key or OAuth modes, streaming, LRU cache, three-layer Phase K response) |
 | `backend/synthesis/prompt.py` | System/user prompts for synthesis |
 | `backend/synthesis/prep.py` | Pre-meeting prep question generation |
 | `backend/server/websocket.py` | Bidirectional WebSocket server (Q&A history, export, prep) |

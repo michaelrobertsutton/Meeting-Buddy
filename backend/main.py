@@ -81,7 +81,7 @@ def main() -> None:
 
     def on_final(text: str, start_time: float, end_time: float) -> None:
         transcript_buffer.add_segment(text, start_time, end_time)
-        print(f"  [{start_time:6.1f}s - {end_time:6.1f}s]  {text}")
+        logger.info("  [%6.1fs - %6.1fs]  %s", start_time, end_time, text)
 
     capture = SCKCapture(config.audio, str(binary_path))
     vad = VADFilter(config.vad, sample_rate=config.audio.target_sample_rate)
@@ -166,15 +166,15 @@ def main() -> None:
     capture.start()
     streaming.start()
 
-    print("\nCapturing system audio via ScreenCaptureKit.")
-    print(f"WebSocket server at ws://{config.server.host}:{config.server.port}")
+    logger.info("Capturing system audio via ScreenCaptureKit.")
+    logger.info("WebSocket server at ws://%s:%d", config.server.host, config.server.port)
     if active_project:
-        print(f"RAG project: {active_project}")
+        logger.info("RAG project: %s", active_project)
     if synthesis_engine:
-        print(f"Synthesis: {config.synthesis.model}")
+        logger.info("Synthesis: %s", config.synthesis.model)
     elif not api_key:
-        print("Synthesis: disabled (no API key — set via Settings panel)")
-    print("Press Ctrl+C to stop.\n")
+        logger.info("Synthesis: disabled (no API key — set via Settings panel)")
+    logger.info("Press Ctrl+C to stop.")
 
     # --- Run asyncio event loop (WebSocket server) in main thread ---
     loop = asyncio.new_event_loop()

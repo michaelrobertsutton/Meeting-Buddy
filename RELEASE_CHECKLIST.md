@@ -54,6 +54,7 @@ Launch the app and confirm:
   - [ ] bullets
   - [ ] citations
 - [ ] Export works (writes Markdown/JSON to disk)
+- [ ] **Synthesis cache hit**: ask the same question twice (or trigger the same detected question twice within a session). The second answer should appear immediately with no visible LLM latency. Confirm a `Cache hit` log line in the backend output.
 
 ## 6) Document ingestion checks
 

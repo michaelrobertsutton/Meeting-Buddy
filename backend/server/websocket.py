@@ -14,6 +14,7 @@ from websockets.asyncio.server import ServerConnection, serve
 from backend.server._commands import CommandsMixin, _git_short_sha
 from backend.config import ServerConfig
 from backend.question.extractor import ActiveQuestionExtractor
+from backend.synthesis.engine import SynthesisResult
 from backend.transcript.buffer import TranscriptBuffer
 
 logger = logging.getLogger(__name__)
@@ -70,6 +71,8 @@ class TranscriptWebSocket(CommandsMixin):
         self._speculative_task: asyncio.Task | None = None
         self._speculative_question: str | None = None
         self._speculative_chunks: list | None = None
+        # Audio check timestamp — initialized here to avoid lazy init in hot path
+        self._last_audio_check_time: float = 0.0
 
     async def start(self) -> None:
         """Start the WebSocket server."""
@@ -279,9 +282,6 @@ class TranscriptWebSocket(CommandsMixin):
 
             # Periodic audio health check (every 10 seconds)
             current_time = time.time()
-            if not hasattr(self, '_last_audio_check_time'):
-                self._last_audio_check_time = current_time
-            
             if current_time - self._last_audio_check_time >= 10.0:
                 self._last_audio_check_time = current_time
                 if hasattr(self, '_capture') and self._capture:
@@ -409,8 +409,7 @@ class TranscriptWebSocket(CommandsMixin):
                 }
 
                 self._active_answer = result_dict
-                from backend.synthesis.engine import SynthesisResult as _SR
-                self._synthesis_engine.cache_result(question, _SR(**result_dict))
+                self._synthesis_engine.cache_result(question, SynthesisResult(**result_dict))
                 # Append to in-memory Q&A history for this session
                 self._qa_history.append(
                     {

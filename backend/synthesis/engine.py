@@ -9,7 +9,13 @@ from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
 
+from typing import TYPE_CHECKING
+
 from backend.synthesis.prompt import SYSTEM_PROMPT, build_user_prompt
+
+if TYPE_CHECKING:
+    from backend.config import SynthesisConfig
+    from ingest.retriever import Retriever
 
 logger = logging.getLogger(__name__)
 
@@ -21,6 +27,26 @@ _USER_AGENT = "codex_cli_rs/0.1.0 (meeting-buddy)"
 
 @dataclass
 class SynthesisResult:
+    """Structured answer produced by SynthesisEngine for a single question.
+
+    Three-layer response (Phase K compounding):
+      - ``bullets``: direct evidence answers drawn from retrieved documents.
+      - ``process_bullets``: execution context (how to do it, steps, gotchas).
+      - ``best_practice_bullets``: general best-practice guidance inferred from
+        the retrieval corpus.
+
+    Additional fields:
+      - ``one_liner``: single-sentence summary of the answer.
+      - ``next_step``: recommended follow-up action after the meeting.
+      - ``clarifiers``: questions to ask the other party to sharpen the answer.
+      - ``citations``: list of ``{"title": ..., "snippet": ...}`` dicts for
+        source attribution.
+      - ``confidence``: float 0–1 representing retrieval/synthesis confidence.
+      - ``inferred``: True when the answer was inferred speculatively rather than
+        matched from an explicit retrieved passage.
+      - ``reasoning``: internal chain-of-thought reasoning (debug/transparency).
+    """
+
     one_liner: str = ""
     bullets: list[str] = field(default_factory=list)
     process_bullets: list[str] = field(default_factory=list)
@@ -33,6 +59,7 @@ class SynthesisResult:
     reasoning: str = ""
 
     def to_dict(self) -> dict:
+        """Return a plain-dict representation suitable for JSON serialisation."""
         return {
             "one_liner": self.one_liner,
             "bullets": self.bullets,
@@ -50,7 +77,7 @@ class SynthesisResult:
 class SynthesisEngine:
     """Calls OpenAI to synthesize answers from retrieved chunks."""
 
-    def __init__(self, config, retriever=None) -> None:
+    def __init__(self, config: SynthesisConfig, retriever: Retriever | None = None) -> None:
         from openai import AsyncOpenAI
 
         self._config = config
@@ -89,7 +116,7 @@ class SynthesisEngine:
         self._last_question = None
         logger.info("Synthesis client reinitialized for ChatGPT backend (model=%s, account=%s)", _CHATGPT_DEFAULT_MODEL, chatgpt_account_id[:8] + "...")
 
-    def set_retriever(self, retriever, project_slug=None):
+    def set_retriever(self, retriever: Retriever | None, project_slug: str | None = None) -> None:
         """Swap the retriever (e.g. after project switch). Clears the LRU cache."""
         self._retriever = retriever
         self._project_slug = project_slug
@@ -115,7 +142,7 @@ class SynthesisEngine:
             self._result_cache[key] = result  # re-insert at end = most recently used
         return result
 
-    def cache_result(self, question, result, chunks=None):
+    def cache_result(self, question: str, result: SynthesisResult) -> None:
         """Store a result in the LRU cache."""
         self._cache_put(self._cache_key(question), result)
 
