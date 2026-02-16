@@ -104,7 +104,7 @@ class SettingsStore: ObservableObject {
         case "auth_complete":
             await fetchSettings()
         case "auth_error":
-            errorMessage = msg["message"] as? String ?? "Auth failed"
+            errorMessage = msg["error"] as? String ?? "Auth failed"
         default:
             break
         }
@@ -213,7 +213,7 @@ class SettingsStore: ObservableObject {
     func startLogin() async {
         do {
             let data = try await sendCommand("start_login")
-            if let urlString = data["url"] as? String, let url = URL(string: urlString) {
+            if let urlString = data["auth_url"] as? String, let url = URL(string: urlString) {
                 NSWorkspace.shared.open(url)
             }
         } catch {
@@ -256,8 +256,21 @@ class SettingsStore: ObservableObject {
 
     private func applySettings(_ data: [String: Any]) {
         activeProject = data["active_project"] as? String ?? activeProject
-        oauthEmail = data["oauth_email"] as? String
-        oauthExpiry = data["oauth_expiry"] as? String
+        if let oauthStatus = data["oauth_status"] as? [String: Any] {
+            oauthEmail = oauthStatus["email"] as? String
+            if let expiresMs = oauthStatus["expires_at_ms"] as? Int64, expiresMs > 0 {
+                let date = Date(timeIntervalSince1970: TimeInterval(expiresMs) / 1000.0)
+                let formatter = DateFormatter()
+                formatter.dateStyle = .medium
+                formatter.timeStyle = .short
+                oauthExpiry = formatter.string(from: date)
+            } else {
+                oauthExpiry = nil
+            }
+        } else {
+            oauthEmail = data["oauth_email"] as? String
+            oauthExpiry = data["oauth_expiry"] as? String
+        }
         hasApiKey = data["has_api_key"] as? Bool ?? false
         if let raw = data["projects"] as? [[String: Any]] {
             projects = raw.compactMap { decodeProject($0) }

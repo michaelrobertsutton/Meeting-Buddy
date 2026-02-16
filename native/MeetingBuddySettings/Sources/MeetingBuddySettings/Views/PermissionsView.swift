@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import AVFoundation
+import CoreGraphics
 
 struct PermissionsView: View {
 
