@@ -82,6 +82,11 @@ document.addEventListener('DOMContentLoaded', () => {
     dom.pinnedList = document.getElementById('pinned-list');
     dom.bestPracticeSection = document.getElementById('best-practice');
     dom.bestPracticeList = document.getElementById('best-practice-list');
+    dom.processBulletsSection = document.getElementById('process-bullets');
+    dom.processBulletList = document.getElementById('process-bullet-list');
+    dom.nextStepCard = document.getElementById('next-step-card');
+    dom.nextStepText = document.getElementById('next-step-text');
+    dom.inferredBadge = document.getElementById('inferred-badge');
     dom.clarifierSection = document.getElementById('clarifiers');
     dom.clarifierList = document.getElementById('clarifier-list');
     dom.citationPills = document.getElementById('citation-pills');
@@ -1745,6 +1750,10 @@ function renderAnswer(data) {
         dom.bulletList.innerHTML = '';
         dom.bestPracticeList.innerHTML = '';
         dom.bestPracticeSection.classList.add('hidden');
+        if (dom.processBulletList) dom.processBulletList.innerHTML = '';
+        if (dom.processBulletsSection) dom.processBulletsSection.classList.add('hidden');
+        if (dom.nextStepCard) dom.nextStepCard.classList.add('hidden');
+        if (dom.inferredBadge) dom.inferredBadge.classList.add('hidden');
         dom.clarifierList.innerHTML = '';
         dom.clarifierSection.classList.add('hidden');
         return;
@@ -1817,8 +1826,33 @@ function renderAnswer(data) {
     });
     dom.bestPracticeSection.classList.toggle('hidden', bpBullets.length === 0);
 
+    // Process bullets (Layer 2 — how to act)
+    if (dom.processBulletList && dom.processBulletsSection) {
+        const procBullets = data.process_bullets || [];
+        dom.processBulletList.innerHTML = '';
+        procBullets.forEach((b) => {
+            const li = document.createElement('li');
+            li.textContent = b;
+            dom.processBulletList.appendChild(li);
+        });
+        dom.processBulletsSection.classList.toggle('hidden', procBullets.length === 0);
+    }
+
+    // Next step action card
+    if (dom.nextStepCard && dom.nextStepText) {
+        const ns = (data.next_step || '').trim();
+        dom.nextStepText.textContent = ns;
+        dom.nextStepCard.classList.toggle('hidden', !ns);
+    }
+
+    // Inferred badge
+    if (dom.inferredBadge) {
+        dom.inferredBadge.classList.toggle('hidden', !data.inferred);
+    }
+
     const hasAnswerContent = !!(data.one_liner && data.one_liner !== 'Waiting for question...') ||
         ((data.bullets || []).length > 0) ||
+        ((data.process_bullets || []).length > 0) ||
         ((data.best_practice_bullets || []).length > 0);
     document.body.classList.toggle('has-answer-content', hasAnswerContent);
 
