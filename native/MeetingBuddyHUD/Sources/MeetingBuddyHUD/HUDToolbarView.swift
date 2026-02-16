@@ -94,6 +94,7 @@ struct HUDToolbarView: View {
                         hovering: $hoveringSettings
                     ) {
                         do {
+                            NotificationCenter.default.post(name: .meetingBuddyHUDHide, object: nil)
                             print("[Settings] gear clicked, launching...")
                             try SettingsLauncher.launch()
                             print("[Settings] launch() returned OK")

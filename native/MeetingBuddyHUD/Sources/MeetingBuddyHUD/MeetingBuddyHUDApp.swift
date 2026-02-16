@@ -189,6 +189,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         if chars == "," {
             DispatchQueue.main.async {
+                self.hudController.hide()
                 try? SettingsLauncher.launch()
             }
             return nil
@@ -204,6 +205,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
               let chars = event.charactersIgnoringModifiers,
               chars == "," else { return }
         DispatchQueue.main.async {
+            self.hudController.hide()
             try? SettingsLauncher.launch()
         }
     }
