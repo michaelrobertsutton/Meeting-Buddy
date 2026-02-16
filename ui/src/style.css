@@ -497,6 +497,75 @@ body:not(.has-question):not(.has-answer-content) #answer {
     letter-spacing: 0.5px;
 }
 
+/* --- Phase K: Contextual Intent Synthesis --- */
+
+.inferred-badge {
+    display: inline-block;
+    padding: 2px 7px;
+    margin-top: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: rgba(255, 200, 80, 0.9);
+    background: rgba(255, 200, 80, 0.12);
+    border: 1px dashed rgba(255, 200, 80, 0.4);
+    border-radius: 4px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.process-bullet-section {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--mb-border-subtle);
+}
+
+.process-bullet-section ul {
+    list-style: none;
+    padding: 0;
+    margin: 4px 0 0 0;
+}
+
+.process-bullet-section ul li {
+    padding: 2px 0 2px 14px;
+    position: relative;
+    font-size: 12px;
+    color: var(--mb-text-secondary);
+    line-height: 1.4;
+}
+
+.process-bullet-section ul li::before {
+    content: '→';
+    position: absolute;
+    left: 0;
+    color: var(--mb-accent);
+    font-size: 11px;
+}
+
+.next-step-card {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(96, 182, 242, 0.08);
+    border-left: 3px solid var(--mb-accent);
+    border-radius: 0 var(--mb-radius-sm) var(--mb-radius-sm) 0;
+}
+
+.next-step-label {
+    font-size: 10px;
+    font-weight: 700;
+    color: var(--mb-accent);
+    text-transform: uppercase;
+    letter-spacing: 0.6px;
+    margin-bottom: 3px;
+}
+
+.next-step-text {
+    font-size: 12px;
+    color: var(--mb-text);
+    line-height: 1.4;
+}
+
+/* --- end Phase K --- */
+
 #answer-searching {
     display: flex;
     align-items: center;

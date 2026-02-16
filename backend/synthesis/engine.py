@@ -25,19 +25,27 @@ _USER_AGENT = "codex_cli_rs/0.1.0 (meeting-buddy)"
 class SynthesisResult:
     one_liner: str = ""
     bullets: list[str] = field(default_factory=list)
+    process_bullets: list[str] = field(default_factory=list)
     best_practice_bullets: list[str] = field(default_factory=list)
+    next_step: str = ""
     clarifiers: list[str] = field(default_factory=list)
     citations: list[dict] = field(default_factory=list)
     confidence: float = 0.0
+    inferred: bool = False
+    reasoning: str = ""
 
     def to_dict(self) -> dict:
         return {
             "one_liner": self.one_liner,
             "bullets": self.bullets,
+            "process_bullets": self.process_bullets,
             "best_practice_bullets": self.best_practice_bullets,
+            "next_step": self.next_step,
             "clarifiers": self.clarifiers,
             "citations": self.citations,
             "confidence": self.confidence,
+            "inferred": self.inferred,
+            "reasoning": self.reasoning,
         }
 
 
@@ -227,10 +235,14 @@ class SynthesisEngine:
             result = SynthesisResult(
                 one_liner=data.get("one_liner", ""),
                 bullets=data.get("bullets", []),
+                process_bullets=data.get("process_bullets", []),
                 best_practice_bullets=data.get("best_practice_bullets", []),
+                next_step=data.get("next_step", "") or "",
                 clarifiers=data.get("clarifiers", []),
                 citations=data.get("citations", []),
                 confidence=float(data.get("confidence", 0.0)),
+                inferred=bool(data.get("inferred", False)),
+                reasoning=data.get("reasoning", "") or "",
             )
 
             # Validate citations
