@@ -67,7 +67,6 @@ class SynthesisEngine:
         # LRU cache
         self._project_slug: str | None = None
         self._result_cache: OrderedDict[str, SynthesisResult] = OrderedDict()
-        self._chunks_cache: OrderedDict[str, list] = OrderedDict()
         self._cache_hit: bool = False
         # OAuth fields (set via reinit_client_oauth)
         self._oauth_token: str | None = None
@@ -100,24 +99,27 @@ class SynthesisEngine:
         self._last_result = None
         self._last_retrieval_ms = None
         self._result_cache.clear()
-        self._chunks_cache.clear()
 
     def _cache_key(self, question):
         norm = re.sub(r'\s+', ' ', question.strip().lower())
         return f"{self._project_slug or ''}|{norm}"
 
-    def _cache_put(self, key, result, chunks):
-        for d in (self._result_cache, self._chunks_cache):
-            d.pop(key, None)
+    def _cache_put(self, key, result):
+        self._result_cache.pop(key, None)
         self._result_cache[key] = result
-        self._chunks_cache[key] = chunks
         while len(self._result_cache) > _CACHE_MAX:
             self._result_cache.popitem(last=False)
-            self._chunks_cache.popitem(last=False)
+
+    def _cache_get(self, key) -> SynthesisResult | None:
+        """Get a cached result and move it to the end (LRU update)."""
+        result = self._result_cache.pop(key, None)
+        if result is not None:
+            self._result_cache[key] = result  # re-insert at end = most recently used
+        return result
 
     def cache_result(self, question, result, chunks=None):
         """Store a result in the LRU cache."""
-        self._cache_put(self._cache_key(question), result, chunks or [])
+        self._cache_put(self._cache_key(question), result)
 
     @property
     def cache_hit(self):
@@ -132,10 +134,11 @@ class SynthesisEngine:
     async def synthesize(self, question, transcript_context=None):
         """Synthesize an answer for the given question. Returns None if unchanged."""
         key = self._cache_key(question)
-        if key in self._result_cache:
+        cached = self._cache_get(key)
+        if cached is not None:
             self._cache_hit = True
             self._last_question = question
-            self._last_result = self._result_cache[key]
+            self._last_result = cached
             return self._last_result
         self._cache_hit = False
         if question == self._last_question:
@@ -148,10 +151,11 @@ class SynthesisEngine:
     async def synthesize_stream(self, question, transcript_context=None, prefetched_chunks=None):
         """Synthesize with streaming. Yields partial text deltas."""
         key = self._cache_key(question)
-        if key in self._result_cache:
+        cached = self._cache_get(key)
+        if cached is not None:
             self._cache_hit = True
             self._last_question = question
-            self._last_result = self._result_cache[key]
+            self._last_result = cached
             return  # no yields -> websocket fallback hits synthesize() -> returns cached result
         self._cache_hit = False
         if question == self._last_question:
@@ -254,7 +258,7 @@ class SynthesisEngine:
                 ]
 
             key = self._cache_key(question)
-            self._cache_put(key, result, results)
+            self._cache_put(key, result)
             logger.info(
                 "Synthesis complete: %d bullets, confidence=%.2f",
                 len(result.bullets), result.confidence,
