@@ -21,7 +21,7 @@ final class HUDPanel: NSPanel {
         level = .normal
         // participatesInCycle lets Mission Control show this window even when not pinned,
         // so users can Alt+Tab / Exposé back to it without needing to use the tray menu.
-        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .participatesInCycle]
+        collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .participatesInCycle, .managed]
         isMovableByWindowBackground = true
         hidesOnDeactivate = false
 

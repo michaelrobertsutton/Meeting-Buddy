@@ -81,11 +81,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             UserDefaults.standard.set(newState, forKey: HUDPanelController.windowFloatingKey)
         }
 
-        // Register global hotkey (Alt+Space) to toggle HUD
-        hotkey = GlobalHotkey { [weak self] in
-            self?.toggleHUD()
+        // Register global hotkey (Alt+Space) to toggle HUD.
+        // Global event monitors require Accessibility permission; prompt once if missing.
+        let accessibilityGranted = AXIsProcessTrustedWithOptions(
+            [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+        )
+        if accessibilityGranted {
+            hotkey = GlobalHotkey { [weak self] in
+                self?.toggleHUD()
+            }
+            hotkey?.register()
         }
-        hotkey?.register()
 
         // Cmd+, opens Settings (same as gear button)
         // Note: Global monitors do NOT receive events when this app is active.
@@ -96,6 +102,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         settingsHotkeyLocalMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             self?.handleKeyDown(event) ?? event
         }
+    }
+
+    // Re-show HUD when user clicks dock icon or re-opens the app.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        if !hasVisibleWindows || !hudController.isVisible {
+            let initialFloating = UserDefaults.standard.bool(forKey: HUDPanelController.windowFloatingKey)
+            hudController.show(initialFloating: initialFloating) {
+                ContentView(ws: ws)
+            }
+            ws.isWindowFloating = initialFloating
+        }
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {
