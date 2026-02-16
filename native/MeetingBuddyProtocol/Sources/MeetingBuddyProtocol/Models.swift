@@ -102,6 +102,9 @@ public struct BackendMessage: Codable {
     // Event fields
     public let question: String?
 
+    // Audio health event fields (audio_warning / audio_error)
+    public let message: String?
+
     public init(
         type: String?,
         protocol_version: Int?,
@@ -120,7 +123,8 @@ public struct BackendMessage: Codable {
         success: Bool?,
         error: String?,
         data: AnyCodable?,
-        question: String?
+        question: String?,
+        message: String? = nil
     ) {
         self.type = type
         self.protocol_version = protocol_version
@@ -140,6 +144,7 @@ public struct BackendMessage: Codable {
         self.error = error
         self.data = data
         self.question = question
+        self.message = message
     }
 }
 

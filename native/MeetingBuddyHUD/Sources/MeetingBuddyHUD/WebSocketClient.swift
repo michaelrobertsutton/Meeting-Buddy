@@ -19,6 +19,7 @@ final class WebSocketClient: ObservableObject {
 
     @Published var connectionState: ConnectionState = .connecting
     @Published var lastError: String? = nil
+    @Published var audioWarning: String? = nil
     @Published var lastExportPath: String? = nil
 
     // UI state
@@ -226,11 +227,18 @@ final class WebSocketClient: ObservableObject {
                         if let total = msg.timings?.total_ms {
                             self.lastTotalMs = total
                         }
+                    case "audio_warning", "audio_error":
+                        self.audioWarning = msg.message ?? "No audio detected — check System Settings › Privacy › Screen & System Audio Recording."
                     case "pinned_update":
                         break
                     default:
                         break
                     }
+                }
+
+                // Clear audio warning once real transcript data arrives (audio is working)
+                if let segs = msg.segments, !segs.isEmpty {
+                    self.audioWarning = nil
                 }
 
                 if let listening = msg.listening { self.isListening = listening }
