@@ -1,3 +1,4 @@
+import MeetingBuddyProtocol
 import SwiftUI
 
 // MARK: - Status Bar
@@ -5,9 +6,26 @@ import SwiftUI
 struct HUDStatusBarView: View {
     let connectionState: WebSocketClient.ConnectionState
     let isPinned: Bool
+    var audioStatus: AudioStatus? = nil
     var lastExportPath: String? = nil
     var ttftMs: Double? = nil
     var totalMs: Double? = nil
+
+    private var audioDotColor: Color {
+        guard let s = audioStatus else { return Color.white.opacity(0.25) }
+        if !s.running { return Color(hex: "#EF5350") }          // process down — red
+        if s.receiving_non_silent_audio { return Color(hex: "#66BB6A") }  // healthy — green
+        if s.receiving_audio { return Color(hex: "#FFA726") }   // silent frames — yellow
+        return Color(hex: "#FFA726")                            // no frames yet — yellow
+    }
+
+    private var audioLabel: String {
+        guard let s = audioStatus else { return "Audio: waiting" }
+        if !s.running { return "Audio: process stopped" }
+        if s.receiving_non_silent_audio { return "Audio: capturing" }
+        if s.frames_received > 50 { return "Audio: silent — check Screen Recording permission" }
+        return "Audio: starting…"
+    }
 
     @State private var pulse: Bool = false
 
@@ -79,6 +97,17 @@ struct HUDStatusBarView: View {
                     pulse = false
                 }
             }
+
+            // Audio capture health indicator
+            HStack(spacing: 4) {
+                Image(systemName: "circle.fill")
+                    .font(.system(size: 6))
+                    .foregroundStyle(audioDotColor)
+                Text(audioLabel)
+                    .font(.caption2)
+                    .foregroundStyle(AppTheme.textSecondary)
+            }
+            .help(audioLabel)
 
             Spacer(minLength: 0)
 

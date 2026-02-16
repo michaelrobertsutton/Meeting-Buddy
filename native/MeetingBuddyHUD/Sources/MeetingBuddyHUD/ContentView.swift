@@ -105,6 +105,7 @@ struct ContentView: View {
             HUDStatusBarView(
                 connectionState: ws.connectionState,
                 isPinned: ws.isWindowFloating,
+                audioStatus: ws.audioStatus,
                 lastExportPath: ws.lastExportPath,
                 ttftMs: ws.lastTTFTms,
                 totalMs: ws.lastTotalMs
