@@ -31,6 +31,10 @@ echo "==> Building .app bundle (this takes ~2 min)…"
 cd "$REPO_ROOT/ui"
 npm run tauri build 2>&1
 
+echo "==> Stabilizing AudioCapture signing identity in bundle…"
+codesign -f -s - --identifier com.meetingbuddy.overlay \
+  "$BUNDLE/Contents/MacOS/AudioCapture"
+
 echo "==> Killing running instance (if any)…"
 osascript -e 'quit app "Meeting Buddy"' 2>/dev/null || true
 killall "Meeting Buddy" 2>/dev/null || true
@@ -45,6 +49,10 @@ sleep 2
 echo "==> Installing to /Applications…"
 rm -rf "/Applications/$APP_NAME.app"
 cp -r "$BUNDLE" "/Applications/$APP_NAME.app"
+
+echo "==> Stabilizing AudioCapture signing identity in /Applications…"
+codesign -f -s - --identifier com.meetingbuddy.overlay \
+  "/Applications/$APP_NAME.app/Contents/MacOS/AudioCapture"
 
 # Remove the build-output copy so Launch Services doesn't see two apps
 # with the same bundle ID and create a duplicate Dock entry.
