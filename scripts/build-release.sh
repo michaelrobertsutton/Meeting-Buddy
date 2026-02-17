@@ -23,6 +23,10 @@ cd "$REPO/ui" && npm ci && npm run tauri build
 APP="$TAURI_DIR/target/release/bundle/macos/Meeting Buddy.app"
 echo "==> [5/5] App: $APP"
 
+echo "==> Stabilizing AudioCapture signing identity in app bundle"
+codesign -f -s - --identifier com.meetingbuddy.overlay \
+  "$APP/Contents/MacOS/AudioCapture"
+
 # Optional: bundle backend source into .app Resources (for PYTHONPATH when using Resources/venv)
 RESOURCES="$APP/Contents/Resources/src"
 mkdir -p "$RESOURCES"

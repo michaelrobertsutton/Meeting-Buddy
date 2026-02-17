@@ -45,6 +45,18 @@ class SCKCapture:
         self._process_exit_code: int | None = None
         self._stderr_lines: list[str] = []
 
+    @staticmethod
+    def _sanitized_child_env() -> dict[str, str]:
+        """Return a subprocess env safe for helper binaries launched from app hosts.
+
+        In macOS app-launched contexts, inherited XPC/bundle env keys can change
+        subprocess runtime identity and break ScreenCaptureKit permission checks.
+        """
+        env = os.environ.copy()
+        for key in ("__CFBundleIdentifier", "XPC_SERVICE_NAME", "XPC_FLAGS"):
+            env.pop(key, None)
+        return env
+
     def _read_exact(self, pipe, n: int) -> bytes | None:
         """Read exactly n bytes from pipe, or return None on EOF."""
         buf = bytearray()
@@ -163,6 +175,7 @@ class SCKCapture:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             bufsize=0,
+            env=self._sanitized_child_env(),
         )
 
         self._stderr_thread = threading.Thread(
