@@ -15,7 +15,7 @@ jobs:
       reason: ${{ steps.gate.outputs.reason }}
     steps:
       - id: gate
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         with:
           script: |
             const event = context.eventName;
