@@ -1,293 +1,158 @@
 # Meeting Buddy
 
-Local-first macOS meeting copilot. Captures system audio via ScreenCaptureKit, transcribes in real-time using Whisper, infers the active question, retrieves evidence from your documents (RAG), and displays an always-on-top overlay with bullet talking points and citations.
+A local-first macOS meeting copilot. It listens to your system audio, transcribes in real time, figures out what question is on the table, searches your documents for relevant context, and surfaces bullet-point answers in a floating overlay — all without leaving the meeting.
 
-All audio and transcript data stays on your device. Only the active question + retrieved context is sent to OpenAI for synthesis.
+Audio and transcripts never leave your machine. Only the inferred question and retrieved context go to OpenAI.
 
-## Features
+---
 
-### Core Capabilities
-- **Real-time transcription** — faster-whisper with Silero VAD, streaming to overlay
-- **Active question inference** — heuristic extraction from rolling transcript buffer
-- **Document RAG** — ingest PDF/DOCX/MD/HTML/URLs, embed with all-MiniLM-L6-v2, search via LanceDB
-- **Bullet synthesis** — GPT-4o-mini generates evidence-backed talking points with citations
-- **Streaming answers** — see answers appear in real-time as they're generated
-- **Confidence indicators** — color-coded borders (green/yellow/red) and low-confidence warnings
+## What it does
 
-### Meeting Features
-- **Manual question override** — type questions directly in the quick question input
-- **Pre-meeting prep mode** — generate and answer questions before meetings start
-- **Q&A history** — browse past questions and answers from the current session
-- **Session export** — export transcripts and Q&A history as Markdown or JSON
+- **Live transcription** — faster-whisper + Silero VAD, streams to the overlay as you talk
+- **Question detection** — heuristically infers the active question from the rolling transcript
+- **Document RAG** — ingest PDFs, DOCX, Markdown, HTML, or URLs; retrieval via LanceDB + MiniLM embeddings
+- **Streaming answers** — GPT-4o-mini synthesizes evidence-backed talking points with citations, streamed in real time
+- **Manual override** — type your own question if auto-detection misses it
+- **Prep mode** — generate and answer likely questions before the meeting starts
+- **Q&A history** — browse everything asked and answered in the current session
+- **Export** — save the full session (transcript + Q&A) as Markdown or JSON
 
-### UI & Controls
-- **Native macOS HUD** — SwiftUI/AppKit `NSPanel` with real translucency (MeetingBuddyHUD)
-- **Tauri process manager** — tray + app lifecycle host that spawns HUD sidecar and routes top-level window commands
-- **Explicit HUD command IPC** — `toggle_hud`, `hide_hud`, `restore_hud`, `open_settings` over a local FIFO (no Unix signal UX control)
-- **Settings panel** — native SwiftUI settings app for API key/OAuth, projects, docs, permissions
+## Requirements
 
-## Prerequisites
+- macOS 14+ (Apple Silicon)
+- Python 3.9+
+- Rust (for the Tauri process manager): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+- Screen Recording permission — no virtual audio driver needed, it uses ScreenCaptureKit directly
 
-- macOS 14+ (Apple Silicon recommended)
-- Python 3.9+ with venv
-- Rust (for Tauri process manager / bundling): `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-- **Screen Recording permission**:
-  - **Bundled app**: Grant permission to "Meeting Buddy" (System Settings > Privacy & Security > Screen Recording)
-  - **Development mode**: Grant permission to Terminal.app (System Settings > Privacy & Security > Screen Recording)
-  - You can open the relevant System Settings panes from **Meeting Buddy → Settings → Permissions**.
-
-No virtual audio driver needed — Meeting Buddy uses ScreenCaptureKit to capture system audio directly.
-
-## Installation
+## Setup
 
 ```bash
-cd "Meeting Buddy"
+# Clone and enter the repo
+cd Meeting-Buddy
 
-# Create virtual environment
+# Python dependencies
 python3 -m venv .venv
 source .venv/bin/activate
-
-# Install backend + ingest dependencies
 pip install -e .
 
-# Build the Swift audio capture helper
+# Swift audio helper
 cd audio-capture && swift build -c release && cd ..
 
-# Install Tauri UI dependencies
+# UI dependencies
 cd ui && npm install && cd ..
 ```
 
-The first run downloads the Whisper model (~500MB for `small`) — one-time only.
+First run downloads the Whisper model (~500MB for `small`) once.
 
-### Building and Installing the App Bundle
+### Build the app bundle
 
 ```bash
 bash scripts/build-release.sh
 ```
 
-This builds all Swift sidecars (AudioCapture, MeetingBuddyHUD, MeetingBuddySettings), runs `npm run tauri build`, and produces:
+Produces `ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app` (and a DMG if hdiutil is available).
 
-```
-ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app
-dist/MeetingBuddy.dmg  # if hdiutil is available
-```
-
-Then install to Applications:
-
+Install:
 ```bash
 rm -rf "/Applications/Meeting Buddy.app"
 cp -r "ui/src-tauri/target/release/bundle/macos/Meeting Buddy.app" /Applications/
 ```
 
-**Runtime venv resolution** — the backend sidecar looks for a Python venv in this order:
-1. `$MEETINGBUDDY_VENV` (env var override)
-2. `~/.meeting-buddy/venv`
-3. `Contents/Resources/venv` (embedded in the bundle)
-4. `$MEETINGBUDDY_PROJECT_ROOT/.venv` (dev fallback)
+After first launch, grant **Screen Recording** permission to **Meeting Buddy** in System Settings → Privacy & Security → Screen Recording, then restart.
 
-Run `bash scripts/install.sh` once on a fresh machine to create `~/.meeting-buddy/venv`.
+## Running in dev
 
-## Usage
-
-### Running the Bundled App
-
-If you've built and installed the app bundle:
-
-1. **Launch "Meeting Buddy" from Applications** (or Spotlight)
-2. The app will automatically start the backend and display the overlay
-3. **Grant Screen Recording permission** when prompted — you must grant permission to **"Meeting Buddy"** (not Terminal.app) in System Settings > Privacy & Security > Screen Recording
-4. **Restart the app** after granting permissions if audio capture doesn't work immediately
-
-**Important:** Without Screen Recording permission, the app cannot capture audio and transcripts will not appear.
-
-### Development Mode (Quick start)
-
-There are two common dev loops:
-
-**A) Native HUD loop (fastest UI iteration):**
+**Fastest loop (native HUD only):**
 ```bash
-# Terminal 1: backend
-source .venv/bin/activate
-python -m backend.main
+# Terminal 1
+source .venv/bin/activate && python -m backend.main
 
-# Terminal 2: native HUD
-cd native/MeetingBuddyHUD
-swift run
+# Terminal 2
+cd native/MeetingBuddyHUD && swift run
 ```
 
-**B) Full app loop (tray + global shortcuts via Tauri):**
+**Full stack (Tauri tray + global shortcuts):**
 ```bash
-# Build/copy sidecars for Tauri (one-time or whenever they change)
+# Build sidecars once (or when they change)
 cd native/MeetingBuddyHUD && swift build -c release
 cp .build/release/MeetingBuddyHUD ../../ui/src-tauri/MeetingBuddyHUD-aarch64-apple-darwin
-cd -
-
-cd native/MeetingBuddySettings && swift build -c release
+cd ../MeetingBuddySettings && swift build -c release
 cp .build/release/MeetingBuddySettings ../../ui/src-tauri/MeetingBuddySettings-aarch64-apple-darwin
-cd -
+cd ../..
 
-# Terminal 1: backend
-source .venv/bin/activate
-python -m backend.main
+# Terminal 1
+source .venv/bin/activate && python -m backend.main
 
-# Terminal 2: Tauri process manager
+# Terminal 2
 cd ui && npm run tauri dev
 ```
 
-Tip: Settings opens as a **separate native Settings app** (Cmd+,) with sidebar navigation. Repeated open/close reuses a single running instance and brings its window back to front (no forced relaunch).
-
-Click the gear icon in the overlay to:
-1. **Set your OpenAI API key** (or use OAuth with ChatGPT Plus) — required for synthesis
-2. **Create a project** and switch to it
-3. **Add documents**:
-   - Use **Add Files** or **Add Folder** for local documents (PDF, DOCX, MD, HTML)
-   - Paste a **URL** in the URL input field and click **Add URL** to ingest web content
-   - Ingestion runs in the background with progress indicators
-
-### Using the Overlay
-
-**During meetings:**
-- The overlay automatically detects questions from the transcript and generates answers
-- Use the **quick question input** (top bar) to manually ask questions
-- Click **"Auto"** to resume automatic question detection
-- View **Q&A History** to see past questions and answers
-- Answers show **confidence indicators**: green border (high), yellow (medium), red (low)
-
-**Before meetings (Prep Mode):**
-- Click **"Prep Mode"** in settings to generate prep questions
-- Add custom prep questions and get answers immediately
-- Switch back to meeting mode when ready
-
-**After meetings:**
-- Use **Export Session** to save transcript and Q&A history as Markdown or JSON
-
-### CLI fallback (power users)
+## Document ingestion
 
 ```bash
-# Start with a specific project (overrides saved setting)
-python -m backend.main --project "my-project"
-
-# Or set API key via environment
-OPENAI_API_KEY=sk-... python -m backend.main --project "my-project"
-
-# Ingest documents via CLI
 python -m ingest create-project --name "my-project"
 python -m ingest ingest --project "my-project" --path /path/to/docs/
-python -m ingest ingest --project "my-project" --path https://example.com/article  # URLs work too!
+python -m ingest ingest --project "my-project" --path https://example.com/article
 python -m ingest list-docs --project "my-project"
 ```
 
-## Settings behavior
-
-Settings launches as a **separate native app** (`MeetingBuddySettings`) rather than an in-HUD sheet. The HUD and tray route settings opens through an explicit command contract, and the Settings app keeps a single window instance that is shown/hidden instead of terminate/relaunch cycles.
-
-Permissions in the Settings UI prioritize runtime capture diagnostics (`get_audio_status`) so Screen Recording status aligns with the active capture pipeline.
+Or use the Settings panel (Cmd+,) to manage projects and docs through the UI.
 
 ## Hotkeys
 
 | Shortcut | Action |
 |----------|--------|
-| `Option+Space` | Toggle HUD visibility |
-| `Cmd+H` | Hide HUD (bring back with Option+Space) |
-| `Cmd+,` | Open Settings |
-| `Cmd+K` | Clear Session (UI reset) |
-| `Cmd+Shift+P` | Pin/unpin output (freeze while you speak) |
+| `Option+Space` | Toggle overlay |
+| `Cmd+H` | Hide overlay |
+| `Cmd+,` | Settings |
+| `Cmd+K` | Clear session |
+| `Cmd+Shift+P` | Pin/unpin output |
 
 ## Configuration
 
-Edit defaults in `backend/config.py`. Key settings:
+Key settings in `backend/config.py`:
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| `model_size` | `"small"` | Whisper model (`tiny.en`, `base.en`, `small`, `medium`) |
-| `compute_type` | `"int8"` | Quantization for CPU inference |
-| `silence_duration_ms` | `300` | Silence before triggering transcription |
+| Setting | Default | Notes |
+|---------|---------|-------|
+| `model_size` | `"small"` | `tiny.en` is faster, `medium` is more accurate |
+| `compute_type` | `"int8"` | Quantization level |
+| `silence_duration_ms` | `300` | Pause that triggers transcription |
 | `max_chunk_duration_s` | `5.0` | Max audio chunk length |
 
-Settings like API key and active project persist in `~/.meeting-buddy/config.json`.
+API key and active project persist in `~/.meeting-buddy/config.json`.
 
 ## Troubleshooting
 
-**No transcript appearing**
-- **Bundled app**: Ensure Screen Recording permission is granted to **"Meeting Buddy"** (System Settings > Privacy & Security > Screen Recording)
-- **Development mode**: Ensure Screen Recording permission is granted to **Terminal.app**
-- Play audio with clear speech (not just music)
-- Check that `audio-capture/.build/release/AudioCapture` exists (build with `swift build -c release`)
-- Verify audio is actually playing (check system volume)
-- Try restarting the app after granting permissions
+**No transcript**
+- Check Screen Recording permission is granted to the right app (Meeting Buddy for bundles, Terminal for dev)
+- Make sure audio is actually playing — the VAD won't fire on silence
+- Verify the Swift binary exists: `audio-capture/.build/release/AudioCapture`
+- Restart after granting permissions
 
-**Cannot connect to the server (ws://localhost:8765)**
-- The "server" is the local Python backend. If nothing is listening on `localhost:8765`, the backend did not start.
-- **Bundled app**: Launch **Meeting Buddy** from Applications (this starts the backend + tray). Then open HUD/Settings. If it still fails, the bundle may not find a Python venv (e.g. copy `.venv` to `~/.meeting-buddy/venv` or see the build docs for bundling a venv).
-- **Dev**: Start the backend first in a separate terminal: `source .venv/bin/activate && python -m backend.main`, then run the UI with `cd ui && npm run tauri dev`. If you started the native HUD directly (`swift run`), the reliable path is still running the backend yourself.
-
-**Transcription is slow**
-- Switch to a smaller model: `model_size="tiny.en"` in `backend/config.py`
+**Can't connect to ws://localhost:8765**
+- The backend isn't running. Start it first: `source .venv/bin/activate && python -m backend.main`
+- For the bundled app, if connection fails, the venv may not be found — copy `.venv` to `~/.meeting-buddy/venv` or run `bash scripts/install.sh`
 
 **Synthesis not working**
-- Check that an OpenAI API key is configured (Settings panel or `OPENAI_API_KEY` env var)
-- Check that a project is selected and has ingested documents
-- For OAuth mode: ensure you've logged in via the Settings panel
+- Set your OpenAI API key in Settings, or via `OPENAI_API_KEY` env var
+- Make sure a project is selected and has documents ingested
 
-**URL ingestion failing**
-- Check your internet connection
-- Some sites may block automated requests — try a different URL
-- Check backend logs for HTTP error codes
+**Transcription slow**
+- Drop to `model_size = "tiny.en"` in `backend/config.py`
 
-## Project Structure
+## Project layout
 
 ```
-Meeting Buddy/
-├── backend/
-│   ├── main.py              # Entry point (audio + ASR + WebSocket)
-│   ├── config.py            # All configuration dataclasses
-│   ├── settings.py          # Persistent settings (API key, project)
-│   ├── audio/
-│   │   └── sck_capture.py   # ScreenCaptureKit audio capture
-│   ├── asr/
-│   │   ├── engine.py        # faster-whisper wrapper
-│   │   ├── vad.py           # Silero VAD wrapper
-│   │   └── streaming.py     # VAD -> ASR orchestrator
-│   ├── transcript/
-│   │   └── buffer.py        # Rolling transcript buffer
-│   ├── question/
-│   │   └── extractor.py     # Active question inference
-│   ├── synthesis/
-│   │   ├── engine.py        # OpenAI synthesis (GPT-4o-mini, streaming)
-│   │   ├── prompt.py        # System/user prompts
-│   │   └── prep.py          # Pre-meeting prep question generation
-│   ├── auth/
-│   │   ├── oauth.py         # OpenAI OAuth token management
-│   │   └── login_server.py  # OAuth callback server
-│   ├── export/
-│   │   └── renderer.py      # Session export (Markdown/JSON)
-│   └── server/
-│       └── websocket.py     # Bidirectional WebSocket server
-├── audio-capture/
-│   └── Sources/AudioCapture/main.swift  # Swift SCK helper
-├── ingest/
-│   ├── config.py            # Ingest configuration
-│   ├── parsers/             # PDF, DOCX, MD, HTML, URL parsers
-│   │   ├── base.py          # Parser protocol
-│   │   ├── pdf_parser.py
-│   │   ├── docx_parser.py
-│   │   ├── markdown_parser.py
-│   │   ├── html_parser.py
-│   │   ├── url_parser.py    # Web URL fetching & parsing
-│   │   └── registry.py     # Parser selection
-│   ├── chunker.py           # Text chunking
-│   ├── embedder.py          # Sentence-transformer embeddings
-│   ├── store.py             # LanceDB vector store
-│   ├── retriever.py         # Query-time retrieval
-│   ├── pipeline.py          # Parse -> chunk -> embed -> store
-│   ├── project_manager.py   # Project CRUD
-│   └── __main__.py          # CLI entry point
-└── ui/
-    ├── index.html           # Overlay HTML (+ settings drawer, Q&A history, prep mode)
-    ├── src/
-    │   ├── main.js          # WebSocket client, settings, file picker, prep mode
-    │   └── style.css        # Dark theme styles + confidence indicators
-    └── src-tauri/
-        ├── src/lib.rs        # Tauri setup (hotkeys, dialog plugin)
-        └── tauri.conf.json   # Window config (always-on-top, transparent)
+Meeting-Buddy/
+├── backend/          # Python: audio, ASR, question detection, synthesis, WebSocket
+├── audio-capture/    # Swift: ScreenCaptureKit audio helper (raw PCM → stdout)
+├── ingest/           # Document pipeline: parse → chunk → embed → LanceDB
+├── native/
+│   ├── MeetingBuddyHUD/       # SwiftUI floating overlay
+│   └── MeetingBuddySettings/  # SwiftUI settings app
+└── ui/               # Tauri process manager (tray, hotkeys, sidecar lifecycle)
 ```
+
+## License
+
+MIT
