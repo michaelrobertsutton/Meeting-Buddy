@@ -1,6 +1,6 @@
-# Contributing (Multi-agent workflow)
+# Contributing
 
-This repo may have multiple AI agents (and humans) working in parallel. To avoid conflicts and duplicated work, follow the workflow below.
+This repo supports both human and automated contributors working in parallel. To avoid conflicts and duplicated work, follow the workflow below.
 
 ## Source of truth: GitHub Issues
 
@@ -10,7 +10,7 @@ This repo may have multiple AI agents (and humans) working in parallel. To avoid
 ## Ownership rules
 
 - **Exactly one assignee per issue**: the person/agent actively implementing it.
-- If others are supporting, coordinate via comments and labels (don’t stack multiple assignees).
+- If others are supporting, coordinate via comments and labels (don't stack multiple assignees).
 
 ## Required labels
 
@@ -24,7 +24,6 @@ CI label:
 - `ci:run` — triggers a full CI run (see [When to add ci:run](#when-to-add-cirun) below)
 
 Agent/area labels (optional but recommended):
-- `agent:claw` — owned by the OpenClaw agent
 - `area:backend` — backend/server work
 - `area:ui` — UI/Tauri work
 - `area:ingest` — ingestion/retrieval work
@@ -71,10 +70,10 @@ GitHub Actions is **opt-in** for PRs to avoid paid CI minutes.
 Add `ci:run` when at least one is true:
 - You touched Tauri/Rust/Swift packaging or process-spawning logic
 - You changed the WebSocket protocol or cross-component contracts (backend ↔ native ↔ UI)
-- You’re ready for review/merge and want CI as the final verification gate
+- You're ready for review/merge and want CI as the final verification gate
 
 Avoid `ci:run` when:
-- You’re iterating quickly on small changes (run local checks instead)
+- You're iterating quickly on small changes (run local checks instead)
 - The change is docs-only or a trivial refactor (unless a reviewer requests CI)
 
 ## Local dev quality tools (recommended)
@@ -148,29 +147,18 @@ Known hot files:
 
 ## Review feedback discipline (required)
 
-We use automated PR reviews (Codex) which often leave **inline review threads** (not top-level PR comments).
+We use automated PR reviews which often leave **inline review threads** (not top-level PR comments).
 
-Before merging any PR, reviewers/agents must check:
+Before merging any PR, reviewers must check:
 - Top-level PR comments
 - Inline review threads
 
-Tip (CLI): use the GraphQL `reviewThreads` query to avoid missing inline feedback.
+## PR discipline (no exceptions)
 
-## Claude / other agents
-
-If you are an AI agent:
-- assign yourself to the issue before starting
-- set `status:in-progress`
-- open a PR and move to `status:review`
-- add an agent label if available
-- follow the Workflow Orchestration guidelines in [CLAUDE.md](CLAUDE.md)
-- after any correction: record the pattern in `tasks/lessons.md`
-
-**No exceptions for "small" or "quick" fixes.** Even a one-line change must go through a branch + PR. The sequence is always:
+Even a one-line change must go through a branch + PR. The sequence is always:
 1. Create (or identify) a GitHub issue
 2. `git checkout -b fix/<N>-slug`
 3. Make changes, commit, push
 4. `gh pr create` — reference and close the issue
-5. Move issue label to `status:review`
 
 Direct commits to `main` are never acceptable.
