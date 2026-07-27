@@ -1,13 +1,11 @@
 import io
 import threading
+from typing import Optional
 
 import numpy as np
 
 from backend.audio.sck_capture import SCKCapture
 from backend.config import AudioConfig
-
-
-from typing import Optional
 
 
 class _FakeProcess:

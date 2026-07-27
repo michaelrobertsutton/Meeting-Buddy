@@ -106,7 +106,10 @@ fn send_hud_command_once(command: &str) -> Result<(), String> {
         .map_err(|e| format!("invalid HUD fifo path {path_str}: {e}"))?;
     let fd = unsafe { libc::open(c_path.as_ptr(), libc::O_WRONLY | libc::O_NONBLOCK) };
     if fd < 0 {
-        return Err(format!("open HUD fifo failed: {}", std::io::Error::last_os_error()));
+        return Err(format!(
+            "open HUD fifo failed: {}",
+            std::io::Error::last_os_error()
+        ));
     }
 
     let payload = format!("{command}\n");
@@ -115,7 +118,10 @@ fn send_hud_command_once(command: &str) -> Result<(), String> {
     let _ = unsafe { libc::close(fd) };
 
     if written < 0 {
-        return Err(format!("write HUD fifo failed: {}", std::io::Error::last_os_error()));
+        return Err(format!(
+            "write HUD fifo failed: {}",
+            std::io::Error::last_os_error()
+        ));
     }
     if written as usize != bytes.len() {
         return Err(format!(
@@ -187,7 +193,6 @@ fn get_backend_diagnostics(state: tauri::State<'_, BackendDiagState>) -> Backend
     state.0.lock().unwrap().clone()
 }
 
-
 /// Spawn the MeetingBuddyHUD sidecar and attach a death-watch task.
 /// If the HUD exits without the intentional-kill flag being set, Tauri exits too.
 fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
@@ -230,7 +235,10 @@ fn spawn_hud_with_deathwatch(app: &tauri::AppHandle) {
                             }
                             if let Some(flag) = h.try_state::<HudIntentionalKill>() {
                                 let mut f = flag.0.lock().unwrap();
-                                if *f { *f = false; break; }
+                                if *f {
+                                    *f = false;
+                                    break;
+                                }
                             }
                             log::info!("[hud] HUD exited by user — quitting Tauri");
                             h.exit(0);
@@ -257,7 +265,7 @@ fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
         if send_hud_command(&app, "open_settings", true) {
             return Ok(());
         }
-        return Err("failed to reach HUD settings command channel".to_string());
+        Err("failed to reach HUD settings command channel".to_string())
     }
 
     #[cfg(not(target_os = "macos"))]
@@ -451,7 +459,7 @@ pub fn run() {
                                                 };
 
                                                 let _ = app_handle_clone.emit("backend-terminated", snapshot);
-                                                
+
                                                 // Optional restart: try once after short delay (let port release)
 
                                                 let app_handle_restart = app_handle_clone.clone();
@@ -662,7 +670,7 @@ pub fn run() {
                     .on_menu_event(move |app_handle, event| {
                         match event.id.as_ref() {
                             "toggle_hud" => {
-                                let _ = send_hud_command(&app_handle, "toggle_hud", true);
+                                let _ = send_hud_command(app_handle, "toggle_hud", true);
                             }
                             "open_settings" => {
                                 if let Err(e) = open_settings_window(app_handle.clone()) {
@@ -671,7 +679,7 @@ pub fn run() {
                             }
 
                             "hide_hud" => {
-                                let _ = send_hud_command(&app_handle, "hide_hud", false);
+                                let _ = send_hud_command(app_handle, "hide_hud", false);
                             }
 
                             "export" => {

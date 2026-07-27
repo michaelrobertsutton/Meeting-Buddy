@@ -2,8 +2,6 @@ import asyncio
 import sys
 import types
 
-import pytest
-
 # The dev test environment may not have optional runtime deps installed.
 # Provide minimal stubs so we can exercise fallback behavior without network calls.
 if "aiohttp" not in sys.modules:

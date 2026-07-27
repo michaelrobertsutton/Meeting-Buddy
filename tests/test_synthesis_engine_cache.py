@@ -4,8 +4,6 @@ from __future__ import annotations
 import sys
 import types
 
-import pytest
-
 # Stub optional deps that may be absent in CI.
 if "aiohttp" not in sys.modules:
     sys.modules["aiohttp"] = types.ModuleType("aiohttp")
