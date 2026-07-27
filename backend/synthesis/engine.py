@@ -8,7 +8,6 @@ import time
 from collections import OrderedDict
 from collections.abc import AsyncGenerator
 from dataclasses import dataclass, field
-
 from typing import TYPE_CHECKING
 
 from backend.synthesis.prompt import SYSTEM_PROMPT, build_user_prompt

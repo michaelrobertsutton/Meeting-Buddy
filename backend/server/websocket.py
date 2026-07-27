@@ -5,15 +5,13 @@ import json
 import logging
 import re
 import time
-from pathlib import Path
-from subprocess import CalledProcessError, check_output
 
 import websockets
 from websockets.asyncio.server import ServerConnection, serve
 
-from backend.server._commands import CommandsMixin, _git_short_sha
 from backend.config import ServerConfig
 from backend.question.extractor import ActiveQuestionExtractor
+from backend.server._commands import CommandsMixin
 from backend.synthesis.engine import SynthesisResult
 from backend.transcript.buffer import TranscriptBuffer
 
@@ -300,9 +298,9 @@ class TranscriptWebSocket(CommandsMixin):
                         await self._broadcast_event({
                             "type": "audio_error",
                             "message": (
-                                "Audio capture process stopped (exit code %d). "
+                                f"Audio capture process stopped (exit code {exit_code}). "
                                 "Grant Screen Recording permission in System Settings \u203a Privacy & Security \u203a Screen Recording, "
-                                "then restart the app." % exit_code
+                                "then restart the app."
                             ),
                         })
                     elif running and frames_received > 50 and not status.get("receiving_non_silent_audio", False):
